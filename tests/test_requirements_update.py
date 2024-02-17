@@ -9,7 +9,7 @@ from packaging.requirements import Requirement
 from packaging.specifiers import Specifier
 from packaging.version import Version
 
-from requirements.update import (
+from dependence.update import (
     get_updated_pyproject_toml,
     get_updated_requirements_txt,
     get_updated_setup_cfg,

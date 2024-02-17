@@ -4,6 +4,7 @@ import re
 from collections import deque
 from configparser import ConfigParser, SectionProxy
 from dataclasses import dataclass
+from importlib.metadata import Distribution, PackageNotFoundError
 from io import StringIO
 from typing import (
     IO,
@@ -20,7 +21,6 @@ from typing import (
 
 import tomli
 import tomli_w
-from importlib_metadata import Distribution, PackageNotFoundError
 from more_itertools import unique_everseen
 from packaging.requirements import Requirement
 from packaging.specifiers import Specifier, SpecifierSet
@@ -439,7 +439,7 @@ def update(
 
 def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        prog="requirements update",
+        prog="dependence update",
         description=(
             "Update requirement versions in the specified files "
             "to align with currently installed versions of each distribution."

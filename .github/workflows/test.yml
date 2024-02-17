@@ -1,8 +1,10 @@
 name: test
 on:
+  schedule:
+    - cron: 0 0 * * 1
   pull_request:
     paths:
-    - requirements/**
+    - dependence/**
     - pyproject.toml
     - setup.py
     - setup.cfg

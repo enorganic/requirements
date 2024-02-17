@@ -1,9 +1,10 @@
 import argparse
 from fnmatch import fnmatch
+from importlib.metadata import Distribution
+from importlib.metadata import distribution as _get_distribution
 from itertools import chain
 from typing import Iterable, Set, Tuple
 
-import importlib_metadata
 from more_itertools import unique_everseen
 
 from ._utilities import iter_parse_delimited_values
@@ -109,24 +110,18 @@ def _iter_frozen_requirements(
         def distribution_name_matches_pattern(pattern: str) -> bool:
             return fnmatch(distribution_name, pattern)
 
-        # * Don't pin importlib-metadata, as it is part of the standard
-        #   library so we should use the version distributed with
-        #   python, and...
-        # * Only include the version in the requirement string if
-        #   the package name does not match any patterns provided in the
-        #   `no_version` argument
         if (distribution_name in _DO_NOT_PIN_DISTRIBUTION_NAMES) or any(
             map(distribution_name_matches_pattern, no_version)
         ):
             return distribution_name
-        distribution: importlib_metadata.Distribution
+        distribution: Distribution
         try:
             distribution = get_distribution(distribution_name)
-        except importlib_metadata.PackageNotFoundError:
+        except KeyError:
             # If the distribution is missing, install it
             install_requirement(distribution_name, echo=False)
-            distribution = importlib_metadata.distribution(distribution_name)
-        return f"{distribution.name}=={distribution.version}"
+            distribution = _get_distribution(distribution_name)
+        return f"{distribution.metadata['Name']}=={distribution.version}"
 
     def get_required_distribution_names_(requirement_string: str) -> Set[str]:
         name: str = get_requirement_string_distribution_name(
@@ -188,7 +183,7 @@ def freeze(
 
 def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        prog="requirements freeze",
+        prog="dependence freeze",
         description=(
             "This command prints dependencies inferred from an installed "
             "distribution or project, in a similar format to the "

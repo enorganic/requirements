@@ -1,4 +1,4 @@
-# Contributing to requirements
+# Contributing to dependence
 
 ## For Contributors and Code Owners
 
@@ -11,9 +11,9 @@
     ```shell script
     cd ~/Code && \
     git clone\
-    https://github.com/enorganic/requirements.git\
-    requirements && \
-    cd requirements && \
+    https://github.com/enorganic/dependence.git\
+    dependence && \
+    cd dependence && \
     make
     ```
 

@@ -1,18 +1,18 @@
-# requirements
+# dependence
 
-[![test](https://github.com/enorganic/requirements/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/enorganic/requirements/actions/workflows/test.yml)
-[![CodeQL](https://github.com/enorganic/requirements/actions/workflows/codeql-analysis.yml/badge.svg?branch=main)](https://github.com/enorganic/requirements/actions/workflows/codeql-analysis.yml)
-[![distribute](https://github.com/enorganic/requirements/actions/workflows/distribute.yml/badge.svg?branch=main)](https://github.com/enorganic/requirements/actions/workflows/distribute.yml)
+[![test](https://github.com/enorganic/dependence/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/enorganic/dependence/actions/workflows/test.yml)
+[![CodeQL](https://github.com/enorganic/dependence/actions/workflows/codeql-analysis.yml/badge.svg?branch=main)](https://github.com/enorganic/dependence/actions/workflows/codeql-analysis.yml)
+[![distribute](https://github.com/enorganic/dependence/actions/workflows/distribute.yml/badge.svg?branch=main)](https://github.com/enorganic/dependence/actions/workflows/distribute.yml)
 
 This project provides command line utilities for performing common python
 development tasks.
 
 ## Installation
 
-You can install `requirements` with pip:
+You can install `dependence` with pip:
 
 ```shell
-pip3 install requirements
+pip3 install dependence
 ```
 
 ## Usage
@@ -20,9 +20,9 @@ pip3 install requirements
 ### Command Line Interface
 
 ```command prompt
-$ requirements -h
+$ dependence -h
 Usage:
-  requirements <command> [options]
+  dependence <command> [options]
 
 Commands:
   update                      Update requirement versions in the specified
@@ -33,11 +33,11 @@ Commands:
                               to the output of `pip freeze`.
 ```
 
-#### requirements update
+#### dependence update
 
 ```command prompt
-$ requirements update -h
-usage: requirements update [-h] [-i IGNORE] [-aen ALL_EXTRA_NAME]
+$ dependence update -h
+usage: dependence update [-h] [-i IGNORE] [-aen ALL_EXTRA_NAME]
                            path [path ...]
 
 Update requirement versions in the specified files to align with currently
@@ -61,11 +61,11 @@ optional arguments:
                         files)
 ```
 
-#### requirements freeze
+#### dependence freeze
 
 ```command prompt
-$ requirements % requirements freeze -h
-usage: requirements freeze [-h] [-e EXCLUDE] [-er EXCLUDE_RECURSIVE]
+$ dependence % dependence freeze -h
+usage: dependence freeze [-h] [-e EXCLUDE] [-er EXCLUDE_RECURSIVE]
                            [-nv NO_VERSION]
                            requirement [requirement ...]
 
