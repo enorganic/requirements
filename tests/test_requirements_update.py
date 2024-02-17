@@ -1,4 +1,5 @@
 import unittest
+from collections import deque
 from configparser import ConfigParser
 from pathlib import Path
 from typing import Iterable
@@ -50,18 +51,20 @@ def validate_requirement(requirement_string: str) -> None:
         print(requirement_string)
         requirement: Requirement = Requirement(requirement_string)
         if requirement.name in ("pip", "setuptools"):
-            list(
+            deque(
                 map(
                     validate_zero_specifier,  # type: ignore
                     requirement.specifier,
-                )
+                ),
+                maxlen=0,
             )
         else:
-            list(
+            deque(
                 map(
                     validate_nonzero_specifier,  # type: ignore
                     requirement.specifier,
-                )
+                ),
+                maxlen=0,
             )
 
 
