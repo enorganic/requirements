@@ -1,1 +1,105 @@
 # requirements
+
+[![test](https://github.com/enorganic/requirements/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/enorganic/requirements/actions/workflows/test.yml)
+[![CodeQL](https://github.com/enorganic/requirements/actions/workflows/codeql-analysis.yml/badge.svg?branch=main)](https://github.com/enorganic/requirements/actions/workflows/codeql-analysis.yml)
+[![distribute](https://github.com/enorganic/requirements/actions/workflows/distribute.yml/badge.svg?branch=main)](https://github.com/enorganic/requirements/actions/workflows/distribute.yml)
+
+This project provides command line utilities for performing common python
+development tasks.
+
+## Installation
+
+You can install `requirements` with pip:
+
+```shell
+pip3 install requirements
+```
+
+## Usage
+
+### Command Line Interface
+
+```command prompt
+$ requirements -h
+Usage:
+  requirements <command> [options]
+
+Commands:
+  update                      Update requirement versions in the specified
+                              files to align with currently installed versions
+                              of each distribution
+  freeze                      Print dependencies inferred from an installed
+                              distribution or project, in a similar format
+                              to the output of `pip freeze`.
+```
+
+#### requirements update
+
+```command prompt
+$ requirements update -h
+usage: requirements update [-h] [-i IGNORE] [-aen ALL_EXTRA_NAME]
+                           path [path ...]
+
+Update requirement versions in the specified files to align with currently
+installed versions of each distribution.
+
+positional arguments:
+  path                  One or more local paths to a setup.cfg,
+                        setup.cfg, and/or requirements.txt file
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -i IGNORE, --ignore IGNORE
+                        A comma-separated list of distributions to ignore
+                        (leave any requirements pertaining to the package
+                        as-is)
+  -aen ALL_EXTRA_NAME, --all-extra-name ALL_EXTRA_NAME
+                        If provided, an extra which consolidates the
+                        requirements for all other extras will be
+                        added/updated to setup.cfg or setup.cfg
+                        (this argument is ignored for requirements.txt
+                        files)
+```
+
+#### requirements freeze
+
+```command prompt
+$ requirements % requirements freeze -h
+usage: requirements freeze [-h] [-e EXCLUDE] [-er EXCLUDE_RECURSIVE]
+                           [-nv NO_VERSION]
+                           requirement [requirement ...]
+
+This command prints dependencies inferred from an installed distribution or
+project, in a similar format to the output of `pip freeze`, except that all
+generated requirements are specified in the format "distribution-
+name==0.0.0" (including for editable installations). Using this command
+instead of `pip freeze` to generate requirement files ensures that you don't
+bloat your requirements files with superfluous distributions.
+
+positional arguments:
+  requirement           One or more requirement specifiers (for example:
+                        "requirement-name", "requirement-
+                        name[extra-a,extra-b]", ".[extra-a, extra-b]" or
+                        "../other-editable-package-directory[extra-a,
+                        extra-b]) and/or paths to a setup.py, setup.cfg,
+                        pyproject.toml, tox.ini or requirements.txt file
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -e EXCLUDE, --exclude EXCLUDE
+                        A distribution (or comma-separated list of
+                        distributions) to exclude from the output
+  -er EXCLUDE_RECURSIVE, --exclude-recursive EXCLUDE_RECURSIVE
+                        A distribution (or comma-separated list of
+                        distributions) to exclude from the output. Unlike -e
+                        / --exclude, this argument also precludes recursive
+                        requirement discovery for the specified packages,
+                        thereby excluding all of the excluded package's
+                        requirements which are not required by another (non-
+                        excluded) distribution.
+  -nv NO_VERSION, --no-version NO_VERSION
+                        Don't include versions (only output distribution
+                        names) for packages matching this/these glob
+                        pattern(s) (note: the value must be single-quoted if
+                        it contains wildcards)
+```
