@@ -1,6 +1,6 @@
 # requirements
 
-[![test](https://github.com/enorganic/requirements/actions/workflows/test.yml/badge.svg)](https://github.com/enorganic/requirements/actions/workflows/test.yml)
+[![test](https://github.com/enorganic/requirements/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/enorganic/requirements/actions/workflows/test.yml)
 [![CodeQL](https://github.com/enorganic/requirements/actions/workflows/codeql-analysis.yml/badge.svg?branch=main)](https://github.com/enorganic/requirements/actions/workflows/codeql-analysis.yml)
 [![distribute](https://github.com/enorganic/requirements/actions/workflows/distribute.yml/badge.svg?branch=main)](https://github.com/enorganic/requirements/actions/workflows/distribute.yml)
 
