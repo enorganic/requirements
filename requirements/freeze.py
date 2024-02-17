@@ -3,7 +3,7 @@ from fnmatch import fnmatch
 from itertools import chain
 from typing import Iterable, Set, Tuple
 
-import pkg_resources
+import importlib_metadata
 from more_itertools import unique_everseen
 
 from ._utilities import iter_parse_delimited_values
@@ -119,15 +119,14 @@ def _iter_frozen_requirements(
             map(distribution_name_matches_pattern, no_version)
         ):
             return distribution_name
-        distribution: pkg_resources.Distribution
+        distribution: importlib_metadata.Distribution
         try:
             distribution = get_distribution(distribution_name)
-        except KeyError:
+        except importlib_metadata.PackageNotFoundError:
             # If the distribution is missing, install it
             install_requirement(distribution_name, echo=False)
-            distribution = get_distribution(distribution_name)
-        requirement_string: str = str(distribution.as_requirement())
-        return requirement_string
+            distribution = importlib_metadata.distribution(distribution_name)
+        return f"{distribution.name}=={distribution.version}"
 
     def get_required_distribution_names_(requirement_string: str) -> Set[str]:
         name: str = get_requirement_string_distribution_name(

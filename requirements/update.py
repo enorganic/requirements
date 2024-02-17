@@ -20,12 +20,12 @@ from typing import (
 
 import tomli
 import tomli_w
+from importlib_metadata import Distribution, PackageNotFoundError
 from more_itertools import unique_everseen
 from packaging.requirements import Requirement
 from packaging.specifiers import Specifier, SpecifierSet
 from packaging.version import Version
 from packaging.version import parse as parse_version
-from pkg_resources import Distribution
 
 from ._utilities import iter_parse_delimited_values
 from .utilities import (
@@ -142,7 +142,7 @@ def _get_updated_requirement_string(
     try:
         distribution: Distribution = get_installed_distributions()[name]
         _update_requirement_specifiers(requirement, distribution.version)
-    except KeyError:
+    except PackageNotFoundError:
         # If the requirement isn't installed, we can't update the version
         pass
     return str(requirement)

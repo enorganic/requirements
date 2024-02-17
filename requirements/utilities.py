@@ -1,5 +1,6 @@
 import functools
 import os
+import re
 import sys
 from collections import deque
 from configparser import ConfigParser, SectionProxy
@@ -15,7 +16,7 @@ from types import ModuleType
 from typing import (
     IO,
     Any,
-    Callable,
+    Container,
     Dict,
     Iterable,
     List,
@@ -27,7 +28,6 @@ from typing import (
 from warnings import warn
 
 import importlib_metadata
-import pkg_resources
 import tomli
 from more_itertools import unique_everseen
 from packaging.requirements import InvalidRequirement, Requirement
@@ -38,11 +38,14 @@ from ._utilities import append_exception_text, get_exception_text
 _BUILTIN_DISTRIBUTION_NAMES: Tuple[str] = ("distribute",)
 
 
+_UNSAFE_CHARACTERS_PATTERN: re.Pattern = re.compile("[^A-Za-z0-9.]+")
+
+
 def normalize_name(name: str) -> str:
     """
     Normalize a project/distribution name
     """
-    return pkg_resources.safe_name(canonicalize_name(name)).lower()
+    return _UNSAFE_CHARACTERS_PATTERN.sub("-", canonicalize_name(name)).lower()
 
 
 class ConfigurationFileType(Enum):
@@ -150,20 +153,19 @@ def get_editable_distributions_locations() -> Dict[str, str]:
     return dict(_iter_editable_distribution_locations())
 
 
-def refresh_working_set() -> None:
+def cache_clear() -> None:
     """
-    Force a refresh of all distribution information and clear related caches
+    Clear distribution metadata caches
     """
     get_installed_distributions.cache_clear()
-    get_editable_distributions_locations.cache_clear()  # type: ignore
+    get_editable_distributions_locations.cache_clear()
     is_editable.cache_clear()
     is_installed.cache_clear()
     get_requirement_string_distribution_name.cache_clear()
-    pkg_resources.working_set.entries = []
-    pkg_resources.working_set.__init__()  # type: ignore
+    importlib_metadata.FastPath.__new__.cache_clear()
 
 
-def _iter_find_dist_info(directory: Path, project_name: str) -> Iterable[Path]:
+def _iter_find_dist_info(directory: Path, name: str) -> Iterable[Path]:
     """
     Find all *.dist-info directories for a project in the specified directory
     (there shouldn't be more than one, but pip issues can cause there to
@@ -171,9 +173,7 @@ def _iter_find_dist_info(directory: Path, project_name: str) -> Iterable[Path]:
     """
     yield from filter(
         Path.is_dir,
-        directory.glob(
-            f"{pkg_resources.to_filename(project_name)}" "-*.dist-info"
-        ),
+        directory.glob(f"{name.replace('-', '_')}" "-*.dist-info"),
     )
 
 
@@ -213,8 +213,8 @@ def refresh_editable_distributions() -> None:
     name: str
     location: str
     for name, location in get_editable_distributions_locations().items():
-        distribution: pkg_resources.Distribution = (
-            pkg_resources.get_distribution(name)
+        distribution: importlib_metadata.Distribution = (
+            importlib_metadata.distribution(name)
         )
         egg_base: Path = Path(getattr(distribution, "egg_info")).parent
         # Find pre-existing dist-info directories, and rename them so that
@@ -222,7 +222,7 @@ def refresh_editable_distributions() -> None:
         # merge the two directories, replacing old files with new files
         # when they exist in both
         temp_directory: Path = _move_dist_info_to_temp_directory(
-            egg_base, distribution.project_name
+            egg_base, distribution.name
         )
         try:
             if egg_base == location:
@@ -232,32 +232,27 @@ def refresh_editable_distributions() -> None:
         finally:
             _merge_directories(
                 temp_directory,
-                next(
-                    iter(
-                        _iter_find_dist_info(
-                            egg_base, distribution.project_name
-                        )
-                    )
-                ),
+                next(iter(_iter_find_dist_info(egg_base, distribution.name))),
                 overwrite=False,
             )
-    pkg_resources.working_set.entries = []
-    pkg_resources.working_set.__init__()  # type: ignore
+    importlib_metadata.FastPath.__new__.cache_clear()
 
 
 @functools.lru_cache()
-def get_installed_distributions() -> Dict[str, pkg_resources.Distribution]:
+def get_installed_distributions() -> (
+    Dict[str, importlib_metadata.Distribution]
+):
     """
     Return a dictionary of installed distributions.
     """
     refresh_editable_distributions()
-    installed: Dict[str, pkg_resources.Distribution] = {}
-    for distribution in pkg_resources.working_set:
-        installed[normalize_name(distribution.project_name)] = distribution
+    installed: Dict[str, importlib_metadata.Distribution] = {}
+    for distribution in importlib_metadata.distributions():
+        installed[normalize_name(distribution.name)] = distribution
     return installed
 
 
-def get_distribution(name: str) -> pkg_resources.Distribution:
+def get_distribution(name: str) -> importlib_metadata.Distribution:
     return get_installed_distributions()[normalize_name(name)]
 
 
@@ -389,14 +384,11 @@ def iter_configuration_file_requirement_strings(path: str) -> Iterable[str]:
 
 
 @functools.lru_cache()
-def is_editable(distribution_project_name: str) -> bool:
+def is_editable(name: str) -> bool:
     """
     Return `True` if the indicated distribution is an editable installation.
     """
-    return bool(
-        normalize_name(distribution_project_name)
-        in get_editable_distributions_locations()
-    )
+    return bool(normalize_name(name) in get_editable_distributions_locations())
 
 
 def _get_setup_cfg_metadata(path: str, key: str) -> str:
@@ -597,41 +589,12 @@ def setup_egg_info(directory: Union[str, Path], egg_base: str = "") -> None:
     )
 
 
-def _get_pkg_requirement(
-    requirement_string: str,
-) -> pkg_resources.Requirement:
-    requirement: Union[Requirement, pkg_resources.Requirement] = (
-        _get_requirement(requirement_string, pkg_resources.Requirement.parse)
-    )
-    assert isinstance(requirement, pkg_resources.Requirement)
-    return requirement
-
-
 def get_requirement(
     requirement_string: str,
 ) -> Requirement:
-    requirement: Union[Requirement, pkg_resources.Requirement] = (
-        _get_requirement(requirement_string, Requirement)
-    )
-    assert isinstance(requirement, Requirement)
-    return requirement
-
-
-def _get_requirement(
-    requirement_string: str,
-    constructor: Callable[
-        [str], Union[Requirement, pkg_resources.Requirement]
-    ],
-) -> Union[Requirement, pkg_resources.Requirement]:
     try:
-        return constructor(requirement_string)
-    except (
-        InvalidRequirement,
-        getattr(
-            pkg_resources, "extern"
-        ).packaging.requirements.InvalidRequirement,
-        getattr(pkg_resources, "RequirementParseError"),
-    ):
+        return Requirement(requirement_string)
+    except InvalidRequirement:
         # Try to parse the requirement as an installation target location,
         # such as can be used with `pip install`
         location: str = requirement_string
@@ -643,7 +606,7 @@ def _get_requirement(
         location = os.path.abspath(location)
         name: str = get_setup_distribution_name(location)
         assert name, f"No distribution found in {location}"
-        return constructor(f"{name}{extras}")
+        return Requirement(f"{name}{extras}")
 
 
 def get_required_distribution_names(
@@ -674,7 +637,7 @@ def get_required_distribution_names(
         exclude = set(map(normalize_name, exclude))
     return set(
         _iter_requirement_names(
-            _get_pkg_requirement(requirement_string),
+            get_requirement(requirement_string),
             exclude=exclude,
             recursive=recursive,
             echo=echo,
@@ -682,12 +645,12 @@ def get_required_distribution_names(
     )
 
 
-def _get_pkg_requirement_name(requirement: pkg_resources.Requirement) -> str:
-    return normalize_name(requirement.project_name)
+def _get_requirement_name(requirement: Requirement) -> str:
+    return normalize_name(requirement.name)
 
 
 def install_requirement(
-    requirement: Union[str, Requirement, pkg_resources.Requirement],
+    requirement: Union[str, Requirement],
     echo: bool = True,
 ) -> None:
     """
@@ -701,14 +664,13 @@ def install_requirement(
     """
     if isinstance(requirement, str):
         requirement = Requirement(requirement)
-    return _install_requirement(requirement, echo=echo)
+    return _install_requirement(requirement)
 
 
 def _install_requirement_string(
     requirement_string: str,
     name: str = "",
     editable: bool = False,
-    echo: bool = False,
 ) -> None:
     uncaught_error: Optional[Exception] = None
     flags: Tuple[str, ...]
@@ -753,24 +715,18 @@ def _install_requirement_string(
 
 
 def _install_requirement(
-    requirement: Union[Requirement, pkg_resources.Requirement],
-    echo: bool = True,
+    requirement: Requirement,
 ) -> None:
     requirement_string: str = str(requirement)
     # Get the distribution name
-    name: str = normalize_name(
-        requirement.name
-        if isinstance(requirement, Requirement)
-        else requirement.project_name
-    )
-    distribution: Optional[pkg_resources.Distribution] = None
+    distribution: Optional[importlib_metadata.Distribution] = None
     editable_location: str = ""
     try:
-        distribution = get_distribution(name)
+        distribution = importlib_metadata.distribution(requirement.name)
         editable_location = get_editable_distribution_location(
-            distribution.project_name
+            distribution.name
         )
-    except KeyError:
+    except importlib_metadata.PackageNotFoundError:
         pass
     # If the requirement is installed and editable, re-install from
     # the editable location
@@ -783,20 +739,19 @@ def _install_requirement(
             )
     _install_requirement_string(
         requirement_string=requirement_string,
-        name=name,
+        name=normalize_name(requirement.name),
         editable=bool(editable_location),
-        echo=echo,
     )
     # Refresh the metadata
-    refresh_working_set()
+    cache_clear()
 
 
 def _get_pkg_requirement_distribution(
-    requirement: pkg_resources.Requirement,
+    requirement: Requirement,
     name: str,
     reinstall: bool = True,
     echo: bool = False,
-) -> Optional[pkg_resources.Distribution]:
+) -> Optional[importlib_metadata.Distribution]:
     if name in _BUILTIN_DISTRIBUTION_NAMES:
         return None
     try:
@@ -816,37 +771,63 @@ def _get_pkg_requirement_distribution(
         )
 
 
+def _iter_distribution_requirements(
+    distribution: importlib_metadata.Distribution,
+    extras: Tuple[str, ...] = (),
+    exclude: Container[str] = (),
+) -> Iterable[Requirement]:
+    if not distribution.requires:
+        return
+    requirement: Requirement
+    for requirement in map(Requirement, distribution.requires):
+        if (
+            (requirement.marker is None)
+            or any(
+                requirement.marker.evaluate({"extra": extra})
+                for extra in extras
+            )
+        ) and (normalize_name(requirement.name) not in exclude):
+            yield requirement
+
+
 def _iter_requirement_names(
-    requirement: pkg_resources.Requirement,
+    requirement: Requirement,
     exclude: Set[str],
     recursive: bool = True,
     echo: bool = False,
 ) -> Iterable[str]:
-    name: str = normalize_name(requirement.project_name)
-    extras: Set[str] = set(map(normalize_name, requirement.extras))
+    name: str = normalize_name(requirement.name)
+    extras: Tuple[str, ...] = tuple(map(normalize_name, requirement.extras))
     if name in exclude:
         return ()
     # Ensure we don't follow the same requirement again, causing cyclic
     # recursion
     exclude.add(name)
-    distribution: Optional[pkg_resources.Distribution] = (
+    distribution: Optional[importlib_metadata.Distribution] = (
         _get_pkg_requirement_distribution(requirement, name, echo=echo)
     )
     if distribution is None:
         return ()
-    requirements: List[pkg_resources.Requirement] = distribution.requires(
-        extras=tuple(sorted(extras))
+    requirements: Tuple[Requirement, ...] = tuple(
+        unique_everseen(
+            _iter_distribution_requirements(
+                distribution,
+                extras=extras,
+                exclude=exclude,
+            ),
+            key=_get_requirement_name,
+        )
     )
     lateral_exclude: Set[str] = set()
 
     def iter_requirement_names_(
-        requirement_: pkg_resources.Requirement,
+        requirement_: Requirement,
     ) -> Iterable[str]:
         return _iter_requirement_names(
             requirement_,
             exclude=(
                 exclude
-                | (lateral_exclude - {_get_pkg_requirement_name(requirement_)})
+                | (lateral_exclude - {_get_requirement_name(requirement_)})
             ),
             recursive=recursive,
             echo=echo,
@@ -861,7 +842,7 @@ def _iter_requirement_names(
 
     if recursive:
         requirement_names = chain(
-            filter(not_excluded, map(_get_pkg_requirement_name, requirements)),
+            filter(not_excluded, map(_get_requirement_name, requirements)),
             *map(iter_requirement_names_, requirements),
         )
     return requirement_names
@@ -942,7 +923,7 @@ def iter_distribution_location_file_paths(location: str) -> Iterable[str]:
     name: str = get_setup_distribution_name(location)
     setup_egg_info(location)
     metadata_path: str = os.path.join(
-        location, f"{pkg_resources.to_filename(name)}.egg-info"
+        location, f"{name.replace('-', '_')}.egg-info"
     )
     distribution: importlib_metadata.Distribution = (
         importlib_metadata.Distribution.at(metadata_path)
