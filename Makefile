@@ -43,7 +43,7 @@ distribute:
 
 upgrade:
 	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	requirements freeze\
+	dependence freeze\
 	 -nv '*' . pyproject.toml tox.ini \
 	 > .requirements.txt && \
 	pip install --upgrade --upgrade-strategy eager\
@@ -51,12 +51,12 @@ upgrade:
 	rm .requirements.txt && \
 	make requirements
 
-requirements:
+dependence:
 	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	requirements update\
+	dependence update\
 	 -aen all\
 	 setup.cfg pyproject.toml tox.ini && \
-	requirements freeze\
+	dependence freeze\
 	 -e pip\
 	 -e wheel\
 	 . pyproject.toml tox.ini\

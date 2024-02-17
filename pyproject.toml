@@ -17,7 +17,7 @@ target-version = [
 [tool.isort]
 profile = "black"
 src_paths = [
-    "requirements",
+    "dependence",
     "tests",
     "scripts",
     "setup.py",

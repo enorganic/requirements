@@ -9,7 +9,7 @@ from ._utilities import get_exception_text
 def _print_help() -> None:
     print(
         "Usage:\n"
-        "  requirements <command> [options]\n\n"
+        "  dependence <command> [options]\n\n"
         "Commands:\n"
         "  update                      Update requirement versions in the "
         "specified\n"

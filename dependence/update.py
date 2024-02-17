@@ -439,7 +439,7 @@ def update(
 
 def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        prog="requirements update",
+        prog="dependence update",
         description=(
             "Update requirement versions in the specified files "
             "to align with currently installed versions of each distribution."

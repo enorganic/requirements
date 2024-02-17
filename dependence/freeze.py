@@ -188,7 +188,7 @@ def freeze(
 
 def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        prog="requirements freeze",
+        prog="dependence freeze",
         description=(
             "This command prints dependencies inferred from an installed "
             "distribution or project, in a similar format to the "
