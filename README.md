@@ -64,7 +64,7 @@ optional arguments:
 #### dependence freeze
 
 ```command prompt
-$ dependence % dependence freeze -h
+$ dependence freeze -h
 usage: dependence freeze [-h] [-e EXCLUDE] [-er EXCLUDE_RECURSIVE]
                            [-nv NO_VERSION]
                            requirement [requirement ...]
