@@ -35,6 +35,13 @@ Commands:
 
 #### dependence update
 
+This command will update version specifiers for
+all package requirements in your setup.cfg, pyproject.toml, tox.ini,
+or requirements.txt files to match currently installed versions of each
+distribution (matching the existing granularity, and only for *inclusive*
+specifiers—so where the comparator is "~=", "==", ">=", or "<=", but not where
+the comparator is ">", "<", or "!=").
+
 ```console
 $ dependence update -h
 usage: dependence update [-h] [-i IGNORE] [-aen ALL_EXTRA_NAME]
@@ -59,6 +66,12 @@ optional arguments:
                         added/updated to setup.cfg or setup.cfg
                         (this argument is ignored for requirements.txt
                         files)
+```
+
+Example:
+
+```shell script
+dependence update -aen all setup.cfg pyproject.toml tox.ini
 ```
 
 #### dependence freeze
