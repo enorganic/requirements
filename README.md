@@ -4,8 +4,9 @@
 [![CodeQL](https://github.com/enorganic/dependence/actions/workflows/codeql-analysis.yml/badge.svg?branch=main)](https://github.com/enorganic/dependence/actions/workflows/codeql-analysis.yml)
 [![distribute](https://github.com/enorganic/dependence/actions/workflows/distribute.yml/badge.svg?branch=main)](https://github.com/enorganic/dependence/actions/workflows/distribute.yml)
 
-This project provides command line utilities for performing common python
-development tasks.
+This project provides a Command Line Interface and library for inspecting
+and updating python project dependency versions in setup.cfg, pyproject.toml,
+and requirements.txt files.
 
 ## Installation
 
