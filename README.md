@@ -20,7 +20,7 @@ pip3 install dependence
 
 ### Command Line Interface
 
-```command prompt
+```console
 $ dependence -h
 Usage:
   dependence <command> [options]
@@ -36,7 +36,7 @@ Commands:
 
 #### dependence update
 
-```command prompt
+```console
 $ dependence update -h
 usage: dependence update [-h] [-i IGNORE] [-aen ALL_EXTRA_NAME]
                            path [path ...]
@@ -64,7 +64,7 @@ optional arguments:
 
 #### dependence freeze
 
-```command prompt
+```console
 $ dependence freeze -h
 usage: dependence freeze [-h] [-e EXCLUDE] [-er EXCLUDE_RECURSIVE]
                            [-nv NO_VERSION]
