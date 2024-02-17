@@ -1,7 +1,6 @@
 # dependence
 
 [![test](https://github.com/enorganic/dependence/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/enorganic/dependence/actions/workflows/test.yml)
-[![CodeQL](https://github.com/enorganic/dependence/actions/workflows/codeql-analysis.yml/badge.svg?branch=main)](https://github.com/enorganic/dependence/actions/workflows/codeql-analysis.yml)
 [![distribute](https://github.com/enorganic/dependence/actions/workflows/distribute.yml/badge.svg?branch=main)](https://github.com/enorganic/dependence/actions/workflows/distribute.yml)
 
 This project provides a Command Line Interface and library for inspecting
