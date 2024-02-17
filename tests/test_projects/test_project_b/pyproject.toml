@@ -1,0 +1,34 @@
+[build-system]
+requires = [
+    "setuptools>=0.0.0",
+    "wheel>=0.0.0",
+    "pip"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "test-project-b"
+version = "0.0.0"
+requires-python = ">=3.8"
+dependencies = [
+    "pip",
+    "setuptools>=0.0.0",
+    "more-itertools~=0.0",
+]
+
+[project.optional-dependencies]
+twine = ["twine>=0.0"]
+wheel = ["wheel>=0.0"]
+
+[tool.setuptools]
+packages = ["test_project_b"]
+
+[tool.black]
+line-length = 79
+target-version = [
+    "py38",
+    "py39",
+    "py310",
+    "py311",
+    "py312"
+]
