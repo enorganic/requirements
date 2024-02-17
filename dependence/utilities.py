@@ -6,6 +6,9 @@ from collections import deque
 from configparser import ConfigParser, SectionProxy
 from enum import Enum, auto
 from glob import iglob
+from importlib.metadata import Distribution, PackageNotFoundError, PackagePath
+from importlib.metadata import distribution as _get_distribution
+from importlib.metadata import distributions as _get_distributions
 from itertools import chain
 from pathlib import Path
 from runpy import run_path
@@ -27,7 +30,6 @@ from typing import (
 )
 from warnings import warn
 
-import importlib_metadata
 import tomli
 from more_itertools import unique_everseen
 from packaging.requirements import InvalidRequirement, Requirement
@@ -162,7 +164,6 @@ def cache_clear() -> None:
     is_editable.cache_clear()
     is_installed.cache_clear()
     get_requirement_string_distribution_name.cache_clear()
-    importlib_metadata.FastPath.__new__.cache_clear()
 
 
 def _iter_find_dist_info(directory: Path, name: str) -> Iterable[Path]:
@@ -177,16 +178,14 @@ def _iter_find_dist_info(directory: Path, name: str) -> Iterable[Path]:
     )
 
 
-def _move_dist_info_to_temp_directory(
-    directory: Path, project_name: str
-) -> Path:
+def _move_dist_info_to_temp_directory(directory: Path, name: str) -> Path:
     """
     Move the contents of *.dist-info directories for a project into a temporary
     directory, and return the path to that temp directory.
     """
     temp_directory: Path = Path(mkdtemp())
     dist_info_directory: Path
-    for dist_info_directory in _iter_find_dist_info(directory, project_name):
+    for dist_info_directory in _iter_find_dist_info(directory, name):
         file_path: Path
         for file_path in dist_info_directory.iterdir():
             move(str(file_path), temp_directory.joinpath(file_path.name))
@@ -206,6 +205,24 @@ def _merge_directories(
     rmtree(source_directory)
 
 
+def _get_distribution_dist_info_path(
+    distribution: Distribution,
+) -> Optional[Path]:
+    """
+    Get the dist-info directory for a distribution
+    (a safer method for accessing the equivalent of `distribution._path`)
+    """
+    return distribution._path  # type: ignore
+    if distribution.files is None:
+        return None
+    package_path: PackagePath
+    for package_path in distribution.files:
+        directory = Path(package_path.locate()).parent
+        if directory.name.endswith(".dist-info"):
+            return directory
+    return None
+
+
 def refresh_editable_distributions() -> None:
     """
     Update distribution information for editable installs
@@ -213,46 +230,53 @@ def refresh_editable_distributions() -> None:
     name: str
     location: str
     for name, location in get_editable_distributions_locations().items():
-        distribution: importlib_metadata.Distribution = (
-            importlib_metadata.distribution(name)
+        distribution: Distribution = _get_distribution(name)
+        dist_info_path: Optional[Path] = _get_distribution_dist_info_path(
+            distribution
         )
-        egg_base: Path = Path(getattr(distribution, "egg_info")).parent
+        if dist_info_path is None:
+            continue
+        dist_info_directory: Path = dist_info_path.parent
+        location_path: Path = Path(location)
         # Find pre-existing dist-info directories, and rename them so that
         # the new dist-info directory doesn't overwrite the old one, then
         # merge the two directories, replacing old files with new files
         # when they exist in both
         temp_directory: Path = _move_dist_info_to_temp_directory(
-            egg_base, distribution.name
+            dist_info_directory, distribution.metadata.get("Name", name)
         )
         try:
-            if egg_base == location:
-                setup_egg_info(location)
-            else:
-                setup_dist_info(location, egg_base)
+            setup_egg_info(location_path)
+            if dist_info_directory != location_path:
+                setup_dist_info(location_path, dist_info_directory)
         finally:
             _merge_directories(
                 temp_directory,
-                next(iter(_iter_find_dist_info(egg_base, distribution.name))),
+                next(
+                    iter(
+                        _iter_find_dist_info(
+                            dist_info_directory,
+                            distribution.metadata.get("Name", name),
+                        )
+                    )
+                ),
                 overwrite=False,
             )
-    importlib_metadata.FastPath.__new__.cache_clear()
 
 
 @functools.lru_cache()
-def get_installed_distributions() -> (
-    Dict[str, importlib_metadata.Distribution]
-):
+def get_installed_distributions() -> Dict[str, Distribution]:
     """
     Return a dictionary of installed distributions.
     """
     refresh_editable_distributions()
-    installed: Dict[str, importlib_metadata.Distribution] = {}
-    for distribution in importlib_metadata.distributions():
-        installed[normalize_name(distribution.name)] = distribution
+    installed: Dict[str, Distribution] = {}
+    for distribution in _get_distributions():
+        installed[normalize_name(distribution.metadata["Name"])] = distribution
     return installed
 
 
-def get_distribution(name: str) -> importlib_metadata.Distribution:
+def get_distribution(name: str) -> Distribution:
     return get_installed_distributions()[normalize_name(name)]
 
 
@@ -545,14 +569,18 @@ def get_editable_distribution_location(name: str) -> str:
     return get_editable_distributions_locations().get(normalize_name(name), "")
 
 
-def setup_dist_info(directory: str, output_dir: Union[str, Path] = "") -> None:
+def setup_dist_info(
+    directory: Union[str, Path], output_dir: Union[str, Path] = ""
+) -> None:
     """
     Refresh dist-info for the editable package installed in
     `directory`
     """
-    directory = os.path.abspath(directory)
-    if not os.path.isdir(directory):
-        directory = os.path.dirname(directory)
+    if isinstance(directory, str):
+        directory = Path(directory)
+    directory = directory.absolute()
+    if not directory.is_dir():
+        directory = directory.parent
     if isinstance(output_dir, Path):
         output_dir = str(output_dir)
     return _setup_location(
@@ -719,14 +747,14 @@ def _install_requirement(
 ) -> None:
     requirement_string: str = str(requirement)
     # Get the distribution name
-    distribution: Optional[importlib_metadata.Distribution] = None
+    distribution: Optional[Distribution] = None
     editable_location: str = ""
     try:
-        distribution = importlib_metadata.distribution(requirement.name)
+        distribution = _get_distribution(requirement.name)
         editable_location = get_editable_distribution_location(
-            distribution.name
+            distribution.metadata["Name"]
         )
-    except importlib_metadata.PackageNotFoundError:
+    except PackageNotFoundError:
         pass
     # If the requirement is installed and editable, re-install from
     # the editable location
@@ -751,7 +779,7 @@ def _get_pkg_requirement_distribution(
     name: str,
     reinstall: bool = True,
     echo: bool = False,
-) -> Optional[importlib_metadata.Distribution]:
+) -> Optional[Distribution]:
     if name in _BUILTIN_DISTRIBUTION_NAMES:
         return None
     try:
@@ -772,7 +800,7 @@ def _get_pkg_requirement_distribution(
 
 
 def _iter_distribution_requirements(
-    distribution: importlib_metadata.Distribution,
+    distribution: Distribution,
     extras: Tuple[str, ...] = (),
     exclude: Container[str] = (),
 ) -> Iterable[Requirement]:
@@ -803,8 +831,8 @@ def _iter_requirement_names(
     # Ensure we don't follow the same requirement again, causing cyclic
     # recursion
     exclude.add(name)
-    distribution: Optional[importlib_metadata.Distribution] = (
-        _get_pkg_requirement_distribution(requirement, name, echo=echo)
+    distribution: Optional[Distribution] = _get_pkg_requirement_distribution(
+        requirement, name, echo=echo
     )
     if distribution is None:
         return ()
@@ -925,9 +953,7 @@ def iter_distribution_location_file_paths(location: str) -> Iterable[str]:
     metadata_path: str = os.path.join(
         location, f"{name.replace('-', '_')}.egg-info"
     )
-    distribution: importlib_metadata.Distribution = (
-        importlib_metadata.Distribution.at(metadata_path)
-    )
+    distribution: Distribution = Distribution.at(metadata_path)
     if not distribution.files:
         raise RuntimeError(f"No metadata found at {metadata_path}")
     path: str
