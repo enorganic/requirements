@@ -178,18 +178,16 @@ def _iter_find_dist_info(directory: Path, name: str) -> Iterable[Path]:
     )
 
 
-def _move_dist_info_to_temp_directory(directory: Path, name: str) -> Path:
+def _move_dist_info_to_temp_directory(dist_info_directory: Path) -> Path:
     """
     Move the contents of *.dist-info directories for a project into a temporary
     directory, and return the path to that temp directory.
     """
     temp_directory: Path = Path(mkdtemp())
-    dist_info_directory: Path
-    for dist_info_directory in _iter_find_dist_info(directory, name):
-        file_path: Path
-        for file_path in dist_info_directory.iterdir():
-            move(str(file_path), temp_directory.joinpath(file_path.name))
-        rmtree(dist_info_directory)
+    file_path: Path
+    for file_path in dist_info_directory.iterdir():
+        move(str(file_path), temp_directory.joinpath(file_path.name))
+    rmtree(dist_info_directory)
     return temp_directory
 
 
@@ -198,6 +196,8 @@ def _merge_directories(
 ) -> None:
     source_file_path: Path
     target_file_path: Path
+    if not target_directory.exists():
+        target_directory.mkdir()
     for source_file_path in source_directory.iterdir():
         target_file_path = target_directory.joinpath(source_file_path.name)
         if overwrite or (not target_file_path.exists()):
@@ -243,7 +243,7 @@ def refresh_editable_distributions() -> None:
         # merge the two directories, replacing old files with new files
         # when they exist in both
         temp_directory: Path = _move_dist_info_to_temp_directory(
-            dist_info_directory, distribution.metadata.get("Name", name)
+            dist_info_path
         )
         try:
             setup_egg_info(location_path)
@@ -252,14 +252,7 @@ def refresh_editable_distributions() -> None:
         finally:
             _merge_directories(
                 temp_directory,
-                next(
-                    iter(
-                        _iter_find_dist_info(
-                            dist_info_directory,
-                            distribution.metadata.get("Name", name),
-                        )
-                    )
-                ),
+                dist_info_path,
                 overwrite=False,
             )
 
@@ -774,7 +767,7 @@ def _install_requirement(
     cache_clear()
 
 
-def _get_pkg_requirement_distribution(
+def _get_requirement_distribution(
     requirement: Requirement,
     name: str,
     reinstall: bool = True,
@@ -794,7 +787,7 @@ def _get_pkg_requirement_distribution(
             )
         # Attempt to install the requirement...
         install_requirement(requirement, echo=echo)
-        return _get_pkg_requirement_distribution(
+        return _get_requirement_distribution(
             requirement, name, reinstall=False, echo=echo
         )
 
@@ -825,13 +818,13 @@ def _iter_requirement_names(
     echo: bool = False,
 ) -> Iterable[str]:
     name: str = normalize_name(requirement.name)
-    extras: Tuple[str, ...] = tuple(map(normalize_name, requirement.extras))
+    extras: Tuple[str, ...] = tuple(requirement.extras)
     if name in exclude:
         return ()
     # Ensure we don't follow the same requirement again, causing cyclic
     # recursion
     exclude.add(name)
-    distribution: Optional[Distribution] = _get_pkg_requirement_distribution(
+    distribution: Optional[Distribution] = _get_requirement_distribution(
         requirement, name, echo=echo
     )
     if distribution is None:
@@ -843,7 +836,6 @@ def _iter_requirement_names(
                 extras=extras,
                 exclude=exclude,
             ),
-            key=_get_requirement_name,
         )
     )
     lateral_exclude: Set[str] = set()

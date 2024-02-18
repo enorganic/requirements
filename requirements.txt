@@ -5,7 +5,7 @@ chardet==5.2.0
 charset-normalizer==3.3.2
 click==8.1.7
 colorama==0.4.6
-daves-dev-tools==2.1.0
+daves-dev-tools==2.1.1
 distlib==0.3.8
 docutils==0.20.1
 filelock==3.13.1
@@ -44,6 +44,6 @@ tomli_w==1.0.0
 tox==4.13.0
 twine==5.0.0
 typing_extensions==4.9.0
-urllib3==2.2.0
+urllib3==2.2.1
 virtualenv==20.25.0
 zipp==3.17.0
