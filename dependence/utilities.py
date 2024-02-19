@@ -747,7 +747,7 @@ def _install_requirement(
         editable_location = get_editable_distribution_location(
             distribution.metadata["Name"]
         )
-    except PackageNotFoundError:
+    except (PackageNotFoundError, KeyError):
         pass
     # If the requirement is installed and editable, re-install from
     # the editable location

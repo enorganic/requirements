@@ -4,7 +4,7 @@ import re
 from collections import deque
 from configparser import ConfigParser, SectionProxy
 from dataclasses import dataclass
-from importlib.metadata import Distribution, PackageNotFoundError
+from importlib.metadata import Distribution
 from io import StringIO
 from typing import (
     IO,
@@ -142,7 +142,7 @@ def _get_updated_requirement_string(
     try:
         distribution: Distribution = get_installed_distributions()[name]
         _update_requirement_specifiers(requirement, distribution.version)
-    except PackageNotFoundError:
+    except KeyError:
         # If the requirement isn't installed, we can't update the version
         pass
     return str(requirement)
