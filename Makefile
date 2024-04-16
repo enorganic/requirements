@@ -18,7 +18,7 @@ ci-install:
 	echo "Installation complete"
 
 reinstall:
-	{ rm -R venv || echo "" ; } && \requirements
+	{ rm -R venv || echo "" ; } && \
 	{ python$(PYTHON_VERSION) -m venv venv || py -$(PYTHON_VERSION) -m venv venv ; } && \
 	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
 	pip install --upgrade pip && \

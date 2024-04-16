@@ -23,15 +23,17 @@ from typing import (
     Dict,
     Iterable,
     List,
+    MutableSet,
     Optional,
-    Set,
     Tuple,
     Union,
+    cast,
 )
 from warnings import warn
 
 import tomli
 from more_itertools import unique_everseen
+from ordered_set import OrderedSet
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 
@@ -635,9 +637,9 @@ def get_required_distribution_names(
     exclude: Iterable[str] = (),
     recursive: bool = True,
     echo: bool = False,
-) -> Set[str]:
+) -> MutableSet[str]:
     """
-    Return a `set` of all distribution names which are required by the
+    Return a `tuple` of all distribution names which are required by the
     distribution specified in `requirement_string`.
 
     Parameters:
@@ -653,10 +655,10 @@ def get_required_distribution_names(
       subprocesses will be printed to `sys.stdout`
     """
     if isinstance(exclude, str):
-        exclude = {normalize_name(exclude)}
+        exclude = OrderedSet((normalize_name(exclude),))
     else:
-        exclude = set(map(normalize_name, exclude))
-    return set(
+        exclude = OrderedSet(map(normalize_name, exclude))
+    return OrderedSet(
         _iter_requirement_names(
             get_requirement(requirement_string),
             exclude=exclude,
@@ -813,7 +815,7 @@ def _iter_distribution_requirements(
 
 def _iter_requirement_names(
     requirement: Requirement,
-    exclude: Set[str],
+    exclude: MutableSet[str],
     recursive: bool = True,
     echo: bool = False,
 ) -> Iterable[str]:
@@ -838,16 +840,20 @@ def _iter_requirement_names(
             ),
         )
     )
-    lateral_exclude: Set[str] = set()
+    lateral_exclude: MutableSet[str] = OrderedSet()
 
     def iter_requirement_names_(
         requirement_: Requirement,
     ) -> Iterable[str]:
         return _iter_requirement_names(
             requirement_,
-            exclude=(
+            exclude=cast(
+                MutableSet[str],
                 exclude
-                | (lateral_exclude - {_get_requirement_name(requirement_)})
+                | (
+                    lateral_exclude
+                    - OrderedSet((_get_requirement_name(requirement_),))
+                ),
             ),
             recursive=recursive,
             echo=echo,
@@ -872,23 +878,29 @@ def _iter_requirement_strings_required_distribution_names(
     requirement_strings: Iterable[str],
     echo: bool = False,
 ) -> Iterable[str]:
-    visited_requirement_strings: Set[str] = set()
+    visited_requirement_strings: MutableSet[str] = OrderedSet()
     if isinstance(requirement_strings, str):
         requirement_strings = (requirement_strings,)
 
-    def get_required_distribution_names_(requirement_string: str) -> Set[str]:
+    def get_required_distribution_names_(
+        requirement_string: str,
+    ) -> MutableSet[str]:
         if requirement_string not in visited_requirement_strings:
             try:
                 name: str = get_requirement_string_distribution_name(
                     requirement_string
                 )
                 visited_requirement_strings.add(requirement_string)
-                return get_required_distribution_names(
-                    requirement_string, echo=echo
-                ) | {name}
+                return cast(
+                    MutableSet[str],
+                    get_required_distribution_names(
+                        requirement_string, echo=echo
+                    )
+                    | OrderedSet((name,)),
+                )
             except KeyError:
                 pass
-        return set()
+        return OrderedSet()
 
     return unique_everseen(
         chain(*map(get_required_distribution_names_, requirement_strings)),
@@ -898,7 +910,7 @@ def _iter_requirement_strings_required_distribution_names(
 def get_requirements_required_distribution_names(
     requirements: Iterable[str] = (),
     echo: bool = False,
-) -> Set[str]:
+) -> MutableSet[str]:
     """
     Get the distributions required by one or more specified distributions or
     configuration files.
@@ -911,29 +923,28 @@ def get_requirements_required_distribution_names(
     """
     # Separate requirement strings from requirement files
     if isinstance(requirements, str):
-        requirements = {requirements}
+        requirements = OrderedSet((requirements,))
     else:
-        requirements = set(requirements)
-    requirement_files: Set[str] = set(
+        requirements = OrderedSet(requirements)
+    requirement_files: MutableSet[str] = OrderedSet(
         filter(is_configuration_file, requirements)
     )
-    requirement_strings: Set[str] = requirements - requirement_files
+    requirement_strings: MutableSet[str] = cast(
+        MutableSet[str], requirements - requirement_files
+    )
     name: str
-    return set(
-        sorted(
-            _iter_requirement_strings_required_distribution_names(
-                unique_everseen(
-                    chain(
-                        requirement_strings,
-                        *map(
-                            iter_configuration_file_requirement_strings,
-                            requirement_files,
-                        ),
-                    )
-                ),
-                echo=echo,
+    return OrderedSet(
+        _iter_requirement_strings_required_distribution_names(
+            unique_everseen(
+                chain(
+                    requirement_strings,
+                    *map(
+                        iter_configuration_file_requirement_strings,
+                        requirement_files,
+                    ),
+                )
             ),
-            key=lambda name: name.lower(),
+            echo=echo,
         )
     )
 

@@ -79,15 +79,15 @@ dependence update -aen all setup.cfg pyproject.toml tox.ini
 ```console
 $ dependence freeze -h
 usage: dependence freeze [-h] [-e EXCLUDE] [-er EXCLUDE_RECURSIVE]
-                           [-nv NO_VERSION]
-                           requirement [requirement ...]
+                         [-nv NO_VERSION] [-ao]
+                         requirement [requirement ...]
 
 This command prints dependencies inferred from an installed distribution or
 project, in a similar format to the output of `pip freeze`, except that all
-generated requirements are specified in the format "distribution-
-name==0.0.0" (including for editable installations). Using this command
-instead of `pip freeze` to generate requirement files ensures that you don't
-bloat your requirements files with superfluous distributions.
+generated requirements are specified in the format "distribution-name==0.0.0"
+(including for editable installations). Using this command instead of `pip
+freeze` to generate requirement files ensures that you don't bloat your
+requirements files with superfluous distributions.
 
 positional arguments:
   requirement           One or more requirement specifiers (for example:
@@ -115,4 +115,7 @@ optional arguments:
                         names) for packages matching this/these glob
                         pattern(s) (note: the value must be single-quoted if
                         it contains wildcards)
+  -ao, --alphabetical-order
+                        Print requirements in alphabetical order (case-
+                        insensitive)
 ```
