@@ -1,12 +1,12 @@
 import argparse
 from fnmatch import fnmatch
+from functools import cmp_to_key
 from importlib.metadata import Distribution
 from importlib.metadata import distribution as _get_distribution
 from itertools import chain
-from typing import Iterable, MutableSet, Tuple, cast
+from typing import Dict, Iterable, List, MutableSet, Tuple, cast
 
 from more_itertools import unique_everseen
-from ordered_set import OrderedSet
 
 from ._utilities import iter_parse_delimited_values
 from .utilities import (
@@ -23,6 +23,64 @@ _DO_NOT_PIN_DISTRIBUTION_NAMES: MutableSet[str] = {
     "importlib-metadata",
     "importlib-resources",
 }
+
+
+def _iter_sort_dependents_first(requirements: Iterable[str]) -> Iterable[str]:
+    """
+    Sort requirements such that dependents are first and dependencies are last.
+    """
+    requirements = list(requirements)
+    dependent_dependencies: Dict[str, MutableSet[str]] = dict(
+        (
+            get_requirement_string_distribution_name(requirement),
+            get_required_distribution_names(requirement),
+        )
+        for requirement in requirements
+    )
+    # import sob
+
+    # print(f"!!!{sob.utilities.inspect.represent(dependent_dependencies)}")
+
+    def compare(a: str, b: str) -> int:
+        """
+        Compare two requirements and return -1 if a < b, 0 if a == b, and 1 if
+        a > b.
+        """
+        distribution_name_a: str = get_requirement_string_distribution_name(a)
+        distribution_name_b: str = get_requirement_string_distribution_name(b)
+        lowercase_a: str = distribution_name_a.lower()
+        lowercase_b: str = distribution_name_b.lower()
+        if lowercase_a == lowercase_b:
+            return 0
+        if distribution_name_b in dependent_dependencies[distribution_name_a]:
+            if (
+                distribution_name_a
+                in dependent_dependencies[distribution_name_b]
+            ):
+                # the distributions are interdependent, sort alphabetically
+                return -1 if lowercase_a < lowercase_b else 1
+            # a < b
+            return -1
+        if distribution_name_a in dependent_dependencies[distribution_name_b]:
+            # a > b
+            return 1
+        # a and b are independent, sort alphabetically
+        return -1 if lowercase_a < lowercase_b else 1
+
+    def compare_(a: str, b: str) -> int:
+        i: int = compare(a, b)
+        if (a, b) == ("iniconfig", "pytest"):
+            assert i == 1
+        elif (a, b) == ("pytest", "iniconfig"):
+            assert i == -1
+        return i
+
+    old_requirements: List[str] = list(requirements)
+    requirements.sort(key=cmp_to_key(compare_))
+    assert old_requirements != requirements
+    requirements_str: str = "\n".join(requirements)
+    print(f"!!!{requirements_str}")
+    yield from requirements
 
 
 def get_frozen_requirements(
@@ -53,14 +111,14 @@ def get_frozen_requirements(
     """
     # Separate requirement strings from requirement files
     if isinstance(requirements, str):
-        requirements = OrderedSet((requirements,))
+        requirements = set((requirements,))
     else:
-        requirements = OrderedSet(requirements)
+        requirements = set(requirements)
     if isinstance(no_version, str):
         no_version = (no_version,)
     elif not isinstance(no_version, tuple):
         no_version = tuple(no_version)
-    requirement_files: MutableSet[str] = OrderedSet(
+    requirement_files: MutableSet[str] = set(
         filter(is_configuration_file, requirements)
     )
     requirement_strings: MutableSet[str] = cast(
@@ -76,25 +134,25 @@ def get_frozen_requirements(
                 ),
             )
         ),
-        exclude=OrderedSet(
+        exclude=set(
             chain(
                 # Exclude requirement strings which are *not*
                 # distribution names (such as editable package paths),
                 # as in these cases we are typically looking for this
                 # package's dependencies
                 (
-                    OrderedSet(
+                    set(
                         map(
                             get_requirement_string_distribution_name,
                             requirement_strings,
                         )
                     )
-                    - OrderedSet(map(normalize_name, requirement_strings))
+                    - set(map(normalize_name, requirement_strings))
                 ),
                 map(normalize_name, exclude),
             )
         ),
-        exclude_recursive=OrderedSet(map(normalize_name, exclude_recursive)),
+        exclude_recursive=set(map(normalize_name, exclude_recursive)),
         no_version=no_version,
     )
     if alphabetical_order:
@@ -103,7 +161,10 @@ def get_frozen_requirements(
             sorted(frozen_requirements, key=lambda name: name.lower())
         )
     else:
-        frozen_requirements = tuple(frozen_requirements)
+        frozen_requirements = tuple(
+            _iter_sort_dependents_first(frozen_requirements)
+        )
+        assert frozen_requirements
     if reverse:
         frozen_requirements = tuple(reversed(frozen_requirements))
     return frozen_requirements
@@ -139,14 +200,14 @@ def _iter_frozen_requirements(
             requirement_string
         )
         if name in exclude_recursive:
-            return OrderedSet()
+            return set()
         return cast(
             MutableSet[str],
             (
-                get_required_distribution_names(
+                set((name,))
+                | get_required_distribution_names(
                     requirement_string, exclude=exclude_recursive
                 )
-                | OrderedSet((name,))
             )
             - exclude,
         )
