@@ -1,10 +1,9 @@
 import argparse
 from fnmatch import fnmatch
-from functools import cmp_to_key
 from importlib.metadata import Distribution
 from importlib.metadata import distribution as _get_distribution
 from itertools import chain
-from typing import Dict, Iterable, List, MutableSet, Tuple, cast
+from typing import Dict, Iterable, MutableSet, Tuple, cast
 
 from more_itertools import unique_everseen
 
@@ -25,62 +24,49 @@ _DO_NOT_PIN_DISTRIBUTION_NAMES: MutableSet[str] = {
 }
 
 
-def _iter_sort_dependents_first(requirements: Iterable[str]) -> Iterable[str]:
+def _iter_sort_dependents_last(requirements: Iterable[str]) -> Iterable[str]:
     """
     Sort requirements such that dependents are first and dependencies are last.
     """
     requirements = list(requirements)
-    dependent_dependencies: Dict[str, MutableSet[str]] = dict(
-        (
-            get_requirement_string_distribution_name(requirement),
-            get_required_distribution_names(requirement),
-        )
+    distribution_name: str
+    distribution_requirement: Dict[str, str] = {
+        get_requirement_string_distribution_name(requirement): requirement
         for requirement in requirements
-    )
-    # import sob
+    }
+    dependent_dependencies: Dict[str, MutableSet[str]] = {
+        distribution_name: get_required_distribution_names(requirement)
+        for distribution_name, requirement in distribution_requirement.items()
+    }
+    while dependent_dependencies:
+        dependent: str
+        dependencies: MutableSet[str]
+        item: Tuple[str, MutableSet[str]]
+        for dependent, dependencies in sorted(
+            tuple(dependent_dependencies.items()),
+            key=lambda item: item[0].lower(),
+        ):
 
-    # print(f"!!!{sob.utilities.inspect.represent(dependent_dependencies)}")
+            def is_non_circular_requirement(dependency: str) -> bool:
+                """
+                Return `True` if the dependency is still among the unaccounted
+                for requirements, and is not a circular reference
+                """
+                return (dependency in dependent_dependencies) and (
+                    # Exclude interdependent distributions
+                    # (circular references)
+                    dependent
+                    not in dependent_dependencies[dependency]
+                )
 
-    def compare(a: str, b: str) -> int:
-        """
-        Compare two requirements and return -1 if a < b, 0 if a == b, and 1 if
-        a > b.
-        """
-        distribution_name_a: str = get_requirement_string_distribution_name(a)
-        distribution_name_b: str = get_requirement_string_distribution_name(b)
-        lowercase_a: str = distribution_name_a.lower()
-        lowercase_b: str = distribution_name_b.lower()
-        if lowercase_a == lowercase_b:
-            return 0
-        if distribution_name_b in dependent_dependencies[distribution_name_a]:
-            if (
-                distribution_name_a
-                in dependent_dependencies[distribution_name_b]
+            if (not dependencies) or not any(
+                map(
+                    is_non_circular_requirement,
+                    dependencies,
+                )
             ):
-                # the distributions are interdependent, sort alphabetically
-                return -1 if lowercase_a < lowercase_b else 1
-            # a < b
-            return -1
-        if distribution_name_a in dependent_dependencies[distribution_name_b]:
-            # a > b
-            return 1
-        # a and b are independent, sort alphabetically
-        return -1 if lowercase_a < lowercase_b else 1
-
-    def compare_(a: str, b: str) -> int:
-        i: int = compare(a, b)
-        if (a, b) == ("iniconfig", "pytest"):
-            assert i == 1
-        elif (a, b) == ("pytest", "iniconfig"):
-            assert i == -1
-        return i
-
-    # old_requirements: List[str] = list(requirements)
-    requirements.sort(key=cmp_to_key(compare_))
-    # assert old_requirements != requirements
-    # requirements_str: str = "\n".join(requirements)
-    # print(f"!!!{requirements_str}")
-    yield from requirements
+                yield distribution_requirement.pop(dependent)
+                del dependent_dependencies[dependent]
 
 
 def get_frozen_requirements(
@@ -88,7 +74,7 @@ def get_frozen_requirements(
     exclude: Iterable[str] = (),
     exclude_recursive: Iterable[str] = (),
     no_version: Iterable[str] = (),
-    alphabetical_order: bool = False,
+    dependency_order: bool = False,
     reverse: bool = False,
 ) -> Tuple[str, ...]:
     """
@@ -107,7 +93,8 @@ def get_frozen_requirements(
       those requirements occur elsewhere.
     - no_version ([str]) = (): Exclude version numbers from the output
       (only return distribution names)
-    - alphabetical_order (bool) = False: Sort requirements alphabetically
+    - dependency_order (bool) = False: Sort requirements so that dependents
+      precede dependencies
     """
     # Separate requirement strings from requirement files
     if isinstance(requirements, str):
@@ -155,18 +142,21 @@ def get_frozen_requirements(
         exclude_recursive=set(map(normalize_name, exclude_recursive)),
         no_version=no_version,
     )
-    if alphabetical_order:
+    if dependency_order:
+        frozen_requirements = tuple(
+            _iter_sort_dependents_last(frozen_requirements)
+        )
+        if not reverse:
+            frozen_requirements = tuple(reversed(frozen_requirements))
+    else:
         name: str
         frozen_requirements = tuple(
-            sorted(frozen_requirements, key=lambda name: name.lower())
+            sorted(
+                frozen_requirements,
+                key=lambda name: name.lower(),
+                reverse=reverse,
+            )
         )
-    else:
-        frozen_requirements = tuple(
-            _iter_sort_dependents_first(frozen_requirements)
-        )
-        assert frozen_requirements
-    if reverse:
-        frozen_requirements = tuple(reversed(frozen_requirements))
     return frozen_requirements
 
 
@@ -225,7 +215,7 @@ def freeze(
     exclude: Iterable[str] = (),
     exclude_recursive: Iterable[str] = (),
     no_version: Iterable[str] = (),
-    alphabetical_order: bool = False,
+    dependency_order: bool = False,
     reverse: bool = False,
 ) -> None:
     """
@@ -246,7 +236,8 @@ def freeze(
     - no_version ([str]) = (): Exclude version numbers from the output
       (only print distribution names) for package names matching any of these
       patterns
-    - alphabetical_order (bool) = False: Sort requirements alphabetically
+    - dependency_order (bool) = False: Sort requirements so that dependents
+      precede dependencies
     """
     print(
         "\n".join(
@@ -255,7 +246,7 @@ def freeze(
                 exclude=exclude,
                 exclude_recursive=exclude_recursive,
                 no_version=no_version,
-                alphabetical_order=alphabetical_order,
+                dependency_order=dependency_order,
                 reverse=reverse,
             )
         )
@@ -330,11 +321,11 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "-ao",
-        "--alphabetical-order",
+        "-do",
+        "--dependency-order",
         default=False,
         action="store_true",
-        help="Print requirements in alphabetical order (case-insensitive)",
+        help="Sort requirements so that dependents precede dependencies",
     )
     parser.add_argument(
         "--reverse",
@@ -350,7 +341,7 @@ def main() -> None:
             iter_parse_delimited_values(arguments.exclude_recursive)
         ),
         no_version=arguments.no_version,
-        alphabetical_order=arguments.alphabetical_order,
+        dependency_order=arguments.dependency_order,
     )
 
 

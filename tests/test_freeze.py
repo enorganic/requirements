@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import AbstractSet, MutableSet, Tuple
+from typing import AbstractSet, List, MutableSet, Tuple
 
 from dependence.freeze import get_frozen_requirements
 from dependence.utilities import (
@@ -24,16 +24,17 @@ def test_freeze_order() -> None:
     """
     Verify the sorting of frozen requirements
     """
+    error_messages: List[str] = []
     required: MutableSet[str] = set()
     requirement: str
     frozen_requirements: Tuple[str, ...] = get_frozen_requirements(
-        requirements=REQUIREMENTS_A
+        requirements=REQUIREMENTS_A, dependency_order=True
     )
     assert frozen_requirements
     for requirement in frozen_requirements:
         name: str = get_requirement_string_distribution_name(requirement)
         required_distribution_names: AbstractSet[str] = (
-            get_required_distribution_names(name)
+            get_required_distribution_names(requirement)
         )
         shared_required_distribution_names: AbstractSet[str] = (
             required & required_distribution_names
@@ -45,13 +46,18 @@ def test_freeze_order() -> None:
             if name not in get_required_distribution_names(
                 shared_required_distribution_name
             ):
-                raise RuntimeError(
-                    "Dependency sorting is incorrect - "
+                error_messages.append(
+                    "Dependency sorting is incorrect: "
                     f"{name} should come before "
-                    f"{shared_required_distribution_name}:\n"
-                    "{}".format("\n".join(frozen_requirements))
+                    f"{shared_required_distribution_name}"
                 )
         required.add(name)
+    if error_messages:
+        error_messages.insert(0, "\n")
+        error_messages.append(
+            "\nRequirements:\n\n{}".format("\n".join(required))
+        )
+        raise RuntimeError("\n".join(error_messages))
 
 
 def test_freeze_cli() -> None:
