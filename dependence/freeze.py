@@ -75,11 +75,11 @@ def _iter_sort_dependents_first(requirements: Iterable[str]) -> Iterable[str]:
             assert i == -1
         return i
 
-    old_requirements: List[str] = list(requirements)
+    # old_requirements: List[str] = list(requirements)
     requirements.sort(key=cmp_to_key(compare_))
-    assert old_requirements != requirements
-    requirements_str: str = "\n".join(requirements)
-    print(f"!!!{requirements_str}")
+    # assert old_requirements != requirements
+    # requirements_str: str = "\n".join(requirements)
+    # print(f"!!!{requirements_str}")
     yield from requirements
 
 
