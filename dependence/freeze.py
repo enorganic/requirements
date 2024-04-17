@@ -3,7 +3,7 @@ from fnmatch import fnmatch
 from importlib.metadata import Distribution
 from importlib.metadata import distribution as _get_distribution
 from itertools import chain
-from typing import Iterable, Set, Tuple
+from typing import Dict, Iterable, MutableSet, Tuple, cast
 
 from more_itertools import unique_everseen
 
@@ -18,11 +18,55 @@ from .utilities import (
     normalize_name,
 )
 
-_DO_NOT_PIN_DISTRIBUTION_NAMES: Set[str] = {
-    # standard library
+_DO_NOT_PIN_DISTRIBUTION_NAMES: MutableSet[str] = {
     "importlib-metadata",
     "importlib-resources",
 }
+
+
+def _iter_sort_dependents_last(requirements: Iterable[str]) -> Iterable[str]:
+    """
+    Sort requirements such that dependents are first and dependencies are last.
+    """
+    requirements = list(requirements)
+    distribution_name: str
+    distribution_requirement: Dict[str, str] = {
+        get_requirement_string_distribution_name(requirement): requirement
+        for requirement in requirements
+    }
+    dependent_dependencies: Dict[str, MutableSet[str]] = {
+        distribution_name: get_required_distribution_names(requirement)
+        for distribution_name, requirement in distribution_requirement.items()
+    }
+    while dependent_dependencies:
+        dependent: str
+        dependencies: MutableSet[str]
+        item: Tuple[str, MutableSet[str]]
+        for dependent, dependencies in sorted(
+            tuple(dependent_dependencies.items()),
+            key=lambda item: item[0].lower(),
+        ):
+
+            def is_non_circular_requirement(dependency: str) -> bool:
+                """
+                Return `True` if the dependency is still among the unaccounted
+                for requirements, and is not a circular reference
+                """
+                return (dependency in dependent_dependencies) and (
+                    # Exclude interdependent distributions
+                    # (circular references)
+                    dependent
+                    not in dependent_dependencies[dependency]
+                )
+
+            if (not dependencies) or not any(
+                map(
+                    is_non_circular_requirement,
+                    dependencies,
+                )
+            ):
+                yield distribution_requirement.pop(dependent)
+                del dependent_dependencies[dependent]
 
 
 def get_frozen_requirements(
@@ -30,6 +74,8 @@ def get_frozen_requirements(
     exclude: Iterable[str] = (),
     exclude_recursive: Iterable[str] = (),
     no_version: Iterable[str] = (),
+    dependency_order: bool = False,
+    reverse: bool = False,
 ) -> Tuple[str, ...]:
     """
     Get the (frozen) requirements for one or more specified distributions or
@@ -47,63 +93,77 @@ def get_frozen_requirements(
       those requirements occur elsewhere.
     - no_version ([str]) = (): Exclude version numbers from the output
       (only return distribution names)
+    - dependency_order (bool) = False: Sort requirements so that dependents
+      precede dependencies
     """
     # Separate requirement strings from requirement files
     if isinstance(requirements, str):
-        requirements = {requirements}
+        requirements = set((requirements,))
     else:
         requirements = set(requirements)
     if isinstance(no_version, str):
         no_version = (no_version,)
     elif not isinstance(no_version, tuple):
         no_version = tuple(no_version)
-    requirement_files: Set[str] = set(
+    requirement_files: MutableSet[str] = set(
         filter(is_configuration_file, requirements)
     )
-    requirement_strings: Set[str] = requirements - requirement_files
-    name: str
-    return tuple(
-        sorted(
-            _iter_frozen_requirements(
-                unique_everseen(
-                    chain(
-                        requirement_strings,
-                        *map(
-                            iter_configuration_file_requirement_strings,
-                            requirement_files,
-                        ),
-                    )
-                ),
-                exclude=set(
-                    chain(
-                        # Exclude requirement strings which are *not*
-                        # distribution names (such as editable package paths),
-                        # as in these cases we are typically looking for this
-                        # package's dependencies
-                        (
-                            set(
-                                map(
-                                    get_requirement_string_distribution_name,
-                                    requirement_strings,
-                                )
-                            )
-                            - set(map(normalize_name, requirement_strings))
-                        ),
-                        map(normalize_name, exclude),
-                    )
-                ),
-                exclude_recursive=set(map(normalize_name, exclude_recursive)),
-                no_version=no_version,
-            ),
-            key=lambda name: name.lower(),
-        )
+    requirement_strings: MutableSet[str] = cast(
+        MutableSet[str], requirements - requirement_files
     )
+    frozen_requirements: Iterable[str] = _iter_frozen_requirements(
+        unique_everseen(
+            chain(
+                requirement_strings,
+                *map(
+                    iter_configuration_file_requirement_strings,
+                    requirement_files,
+                ),
+            )
+        ),
+        exclude=set(
+            chain(
+                # Exclude requirement strings which are *not*
+                # distribution names (such as editable package paths),
+                # as in these cases we are typically looking for this
+                # package's dependencies
+                (
+                    set(
+                        map(
+                            get_requirement_string_distribution_name,
+                            requirement_strings,
+                        )
+                    )
+                    - set(map(normalize_name, requirement_strings))
+                ),
+                map(normalize_name, exclude),
+            )
+        ),
+        exclude_recursive=set(map(normalize_name, exclude_recursive)),
+        no_version=no_version,
+    )
+    if dependency_order:
+        frozen_requirements = tuple(
+            _iter_sort_dependents_last(frozen_requirements)
+        )
+        if not reverse:
+            frozen_requirements = tuple(reversed(frozen_requirements))
+    else:
+        name: str
+        frozen_requirements = tuple(
+            sorted(
+                frozen_requirements,
+                key=lambda name: name.lower(),
+                reverse=reverse,
+            )
+        )
+    return frozen_requirements
 
 
 def _iter_frozen_requirements(
     requirement_strings: Iterable[str],
-    exclude: Set[str],
-    exclude_recursive: Set[str],
+    exclude: MutableSet[str],
+    exclude_recursive: MutableSet[str],
     no_version: Iterable[str] = (),
 ) -> Iterable[str]:
     def get_requirement_string(distribution_name: str) -> str:
@@ -123,18 +183,24 @@ def _iter_frozen_requirements(
             distribution = _get_distribution(distribution_name)
         return f"{distribution.metadata['Name']}=={distribution.version}"
 
-    def get_required_distribution_names_(requirement_string: str) -> Set[str]:
+    def get_required_distribution_names_(
+        requirement_string: str,
+    ) -> MutableSet[str]:
         name: str = get_requirement_string_distribution_name(
             requirement_string
         )
         if name in exclude_recursive:
             return set()
-        return (
-            get_required_distribution_names(
-                requirement_string, exclude=exclude_recursive
+        return cast(
+            MutableSet[str],
+            (
+                set((name,))
+                | get_required_distribution_names(
+                    requirement_string, exclude=exclude_recursive
+                )
             )
-            | {name}
-        ) - exclude
+            - exclude,
+        )
 
     requirements: Iterable[str] = unique_everseen(
         chain(*map(get_required_distribution_names_, requirement_strings)),
@@ -149,6 +215,8 @@ def freeze(
     exclude: Iterable[str] = (),
     exclude_recursive: Iterable[str] = (),
     no_version: Iterable[str] = (),
+    dependency_order: bool = False,
+    reverse: bool = False,
 ) -> None:
     """
     Print the (frozen) requirements for one or more specified requirements or
@@ -168,6 +236,8 @@ def freeze(
     - no_version ([str]) = (): Exclude version numbers from the output
       (only print distribution names) for package names matching any of these
       patterns
+    - dependency_order (bool) = False: Sort requirements so that dependents
+      precede dependencies
     """
     print(
         "\n".join(
@@ -176,6 +246,8 @@ def freeze(
                 exclude=exclude,
                 exclude_recursive=exclude_recursive,
                 no_version=no_version,
+                dependency_order=dependency_order,
+                reverse=reverse,
             )
         )
     )
@@ -192,7 +264,9 @@ def main() -> None:
             "(including for editable installations). Using this command "
             "instead of `pip freeze` to generate requirement files ensures "
             "that you don't bloat your requirements files with superfluous "
-            "distributions."
+            "distributions. The default sorting starts with directly "
+            "specified requirements, followed by recursively discovered "
+            "requirements, in the order of discovery."
         ),
     )
     parser.add_argument(
@@ -246,6 +320,19 @@ def main() -> None:
             "value must be single-quoted if it contains wildcards)"
         ),
     )
+    parser.add_argument(
+        "-do",
+        "--dependency-order",
+        default=False,
+        action="store_true",
+        help="Sort requirements so that dependents precede dependencies",
+    )
+    parser.add_argument(
+        "--reverse",
+        default=False,
+        action="store_true",
+        help="Print requirements in reverse order",
+    )
     arguments: argparse.Namespace = parser.parse_args()
     freeze(
         requirements=arguments.requirement,
@@ -254,6 +341,7 @@ def main() -> None:
             iter_parse_delimited_values(arguments.exclude_recursive)
         ),
         no_version=arguments.no_version,
+        dependency_order=arguments.dependency_order,
     )
 
 
