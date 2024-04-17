@@ -264,9 +264,7 @@ def main() -> None:
             "(including for editable installations). Using this command "
             "instead of `pip freeze` to generate requirement files ensures "
             "that you don't bloat your requirements files with superfluous "
-            "distributions. The default sorting starts with directly "
-            "specified requirements, followed by recursively discovered "
-            "requirements, in the order of discovery."
+            "distributions."
         ),
     )
     parser.add_argument(
