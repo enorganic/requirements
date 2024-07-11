@@ -636,6 +636,7 @@ def get_required_distribution_names(
     exclude: Iterable[str] = (),
     recursive: bool = True,
     echo: bool = False,
+    depth: Optional[int] = None,
 ) -> MutableSet[str]:
     """
     Return a `tuple` of all distribution names which are required by the
@@ -652,6 +653,8 @@ def get_required_distribution_names(
       be obtained recursively.
     - echo (bool) = False: If `True`, commands and responses executed in
       subprocesses will be printed to `sys.stdout`
+    - depth (int|None) = None: The maximum depth of recursion to follow
+      requirements. If `None` (the default), recursion is not restricted.
     """
     if isinstance(exclude, str):
         exclude = set((normalize_name(exclude),))
@@ -663,6 +666,7 @@ def get_required_distribution_names(
             exclude=exclude,
             recursive=recursive,
             echo=echo,
+            depth=depth,
         )
     )
 
@@ -817,6 +821,7 @@ def _iter_requirement_names(
     exclude: MutableSet[str],
     recursive: bool = True,
     echo: bool = False,
+    depth: Optional[int] = None,
 ) -> Iterable[str]:
     name: str = normalize_name(requirement.name)
     extras: Tuple[str, ...] = tuple(requirement.extras)
@@ -843,20 +848,23 @@ def _iter_requirement_names(
 
     def iter_requirement_names_(
         requirement_: Requirement,
+        depth_: Optional[int] = None,
     ) -> Iterable[str]:
-        return _iter_requirement_names(
-            requirement_,
-            exclude=cast(
-                MutableSet[str],
-                exclude
-                | (
-                    lateral_exclude
-                    - set((_get_requirement_name(requirement_),))
+        if (depth_ is None) or depth_ >= 0:
+            yield from _iter_requirement_names(
+                requirement_,
+                exclude=cast(
+                    MutableSet[str],
+                    exclude
+                    | (
+                        lateral_exclude
+                        - set((_get_requirement_name(requirement_),))
+                    ),
                 ),
-            ),
-            recursive=recursive,
-            echo=echo,
-        )
+                recursive=recursive,
+                echo=echo,
+                depth=None if (depth_ is None) else depth_ - 1,
+            )
 
     def not_excluded(name: str) -> bool:
         if name not in exclude:
@@ -865,10 +873,19 @@ def _iter_requirement_names(
             return True
         return False
 
+    requirement_names: Iterable[str] = filter(
+        not_excluded, map(_get_requirement_name, requirements)
+    )
     if recursive:
+        requirement_: Requirement
         requirement_names = chain(
-            filter(not_excluded, map(_get_requirement_name, requirements)),
-            *map(iter_requirement_names_, requirements),
+            requirement_names,
+            *map(
+                lambda requirement_: iter_requirement_names_(
+                    requirement_, None if (depth is None) else depth - 1
+                ),
+                requirements,
+            ),
         )
     return requirement_names
 

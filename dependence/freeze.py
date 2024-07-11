@@ -3,7 +3,7 @@ from fnmatch import fnmatch
 from importlib.metadata import Distribution
 from importlib.metadata import distribution as _get_distribution
 from itertools import chain
-from typing import Dict, Iterable, MutableSet, Tuple, cast
+from typing import Dict, Iterable, MutableSet, Optional, Tuple, cast
 
 from more_itertools import unique_everseen
 
@@ -76,6 +76,7 @@ def get_frozen_requirements(
     no_version: Iterable[str] = (),
     dependency_order: bool = False,
     reverse: bool = False,
+    depth: Optional[int] = None,
 ) -> Tuple[str, ...]:
     """
     Get the (frozen) requirements for one or more specified distributions or
@@ -95,6 +96,7 @@ def get_frozen_requirements(
       (only return distribution names)
     - dependency_order (bool) = False: Sort requirements so that dependents
       precede dependencies
+    - depth (int|None) = None: Depth of recursive requirement discovery
     """
     # Separate requirement strings from requirement files
     if isinstance(requirements, str):
@@ -111,37 +113,42 @@ def get_frozen_requirements(
     requirement_strings: MutableSet[str] = cast(
         MutableSet[str], requirements - requirement_files
     )
-    frozen_requirements: Iterable[str] = _iter_frozen_requirements(
-        unique_everseen(
-            chain(
-                requirement_strings,
-                *map(
-                    iter_configuration_file_requirement_strings,
-                    requirement_files,
-                ),
-            )
-        ),
-        exclude=set(
-            chain(
-                # Exclude requirement strings which are *not*
-                # distribution names (such as editable package paths),
-                # as in these cases we are typically looking for this
-                # package's dependencies
-                (
-                    set(
-                        map(
-                            get_requirement_string_distribution_name,
-                            requirement_strings,
-                        )
-                    )
-                    - set(map(normalize_name, requirement_strings))
-                ),
-                map(normalize_name, exclude),
-            )
-        ),
-        exclude_recursive=set(map(normalize_name, exclude_recursive)),
-        no_version=no_version,
+    frozen_requirements: Iterable[str] = unique_everseen(
+        chain(
+            requirement_strings,
+            *map(
+                iter_configuration_file_requirement_strings,
+                requirement_files,
+            ),
+        )
     )
+    if depth is not None:
+        depth -= 1
+    if (depth is None) or depth >= 0:
+        frozen_requirements = _iter_frozen_requirements(
+            frozen_requirements,
+            exclude=set(
+                chain(
+                    # Exclude requirement strings which are *not*
+                    # distribution names (such as editable package paths),
+                    # as in these cases we are typically looking for this
+                    # package's dependencies
+                    (
+                        set(
+                            map(
+                                get_requirement_string_distribution_name,
+                                requirement_strings,
+                            )
+                        )
+                        - set(map(normalize_name, requirement_strings))
+                    ),
+                    map(normalize_name, exclude),
+                )
+            ),
+            exclude_recursive=set(map(normalize_name, exclude_recursive)),
+            no_version=no_version,
+            depth=depth,
+        )
     if dependency_order:
         frozen_requirements = tuple(
             _iter_sort_dependents_last(frozen_requirements)
@@ -165,6 +172,7 @@ def _iter_frozen_requirements(
     exclude: MutableSet[str],
     exclude_recursive: MutableSet[str],
     no_version: Iterable[str] = (),
+    depth: Optional[int] = None,
 ) -> Iterable[str]:
     def get_requirement_string(distribution_name: str) -> str:
         def distribution_name_matches_pattern(pattern: str) -> bool:
@@ -185,25 +193,35 @@ def _iter_frozen_requirements(
 
     def get_required_distribution_names_(
         requirement_string: str,
+        depth_: Optional[int] = None,
     ) -> MutableSet[str]:
         name: str = get_requirement_string_distribution_name(
             requirement_string
         )
         if name in exclude_recursive:
             return set()
+        distribution_names: MutableSet[str] = {name}
+        if (depth_ is None) or depth_:
+            distribution_names |= get_required_distribution_names(
+                requirement_string,
+                exclude=exclude_recursive,
+                depth=None if (depth_ is None) else depth_ - 1,
+            )
         return cast(
             MutableSet[str],
-            (
-                set((name,))
-                | get_required_distribution_names(
-                    requirement_string, exclude=exclude_recursive
-                )
-            )
-            - exclude,
+            distribution_names - exclude,
         )
 
+    distribution_names: MutableSet[str]
     requirements: Iterable[str] = unique_everseen(
-        chain(*map(get_required_distribution_names_, requirement_strings)),
+        chain(
+            *map(
+                lambda distribution_names: get_required_distribution_names_(
+                    distribution_names, None if (depth is None) else depth - 1
+                ),
+                requirement_strings,
+            )
+        ),
     )
 
     requirements = map(get_requirement_string, requirements)
@@ -217,6 +235,7 @@ def freeze(
     no_version: Iterable[str] = (),
     dependency_order: bool = False,
     reverse: bool = False,
+    depth: Optional[int] = None,
 ) -> None:
     """
     Print the (frozen) requirements for one or more specified requirements or
@@ -238,6 +257,7 @@ def freeze(
       patterns
     - dependency_order (bool) = False: Sort requirements so that dependents
       precede dependencies
+    - depth (int|None) = None: Depth of recursive requirement discovery
     """
     print(
         "\n".join(
@@ -248,6 +268,7 @@ def freeze(
                 no_version=no_version,
                 dependency_order=dependency_order,
                 reverse=reverse,
+                depth=depth,
             )
         )
     )
@@ -331,15 +352,23 @@ def main() -> None:
         action="store_true",
         help="Print requirements in reverse order",
     )
-    arguments: argparse.Namespace = parser.parse_args()
+    parser.add_argument(
+        "-d",
+        "--depth",
+        default=None,
+        type=int,
+        help="Depth of recursive requirement discovery",
+    )
+    namespace: argparse.Namespace = parser.parse_args()
     freeze(
-        requirements=arguments.requirement,
-        exclude=tuple(iter_parse_delimited_values(arguments.exclude)),
+        requirements=namespace.requirement,
+        exclude=tuple(iter_parse_delimited_values(namespace.exclude)),
         exclude_recursive=tuple(
-            iter_parse_delimited_values(arguments.exclude_recursive)
+            iter_parse_delimited_values(namespace.exclude_recursive)
         ),
-        no_version=arguments.no_version,
-        dependency_order=arguments.dependency_order,
+        no_version=namespace.no_version,
+        dependency_order=namespace.dependency_order,
+        depth=namespace.depth,
     )
 
 

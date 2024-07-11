@@ -78,50 +78,43 @@ dependence update -aen all setup.cfg pyproject.toml tox.ini
 
 ```console
 $ dependence freeze -h
-usage: dependence freeze [-h] [-e EXCLUDE] [-er EXCLUDE_RECURSIVE]
-                         [-nv NO_VERSION] [-do] [--reverse]
+usage: dependence freeze [-h] [-e EXCLUDE] [-er EXCLUDE_RECURSIVE] [-nv NO_VERSION]
+                         [-do] [--reverse] [-d DEPTH]
                          requirement [requirement ...]
 
-This command prints dependencies inferred from an installed
-distribution or project, in a similar format to the output of `pip
-freeze`, except that all generated requirements are specified in the
-format "distribution-name==0.0.0" (including for editable
-installations). Using this command instead of `pip freeze` to generate
-requirement files ensures that you don't bloat your requirements files
-with superfluous distributions. The default sorting starts with
-directly specified requirements, followed by recursively discovered
-requirements, in the order of discovery.
+This command prints dependencies inferred from an installed distribution or project, in
+a similar format to the output of `pip freeze`, except that all generated requirements
+are specified in the format "distribution-name==0.0.0" (including for editable
+installations). Using this command instead of `pip freeze` to generate requirement
+files ensures that you don't bloat your requirements files with superfluous
+distributions.
 
 positional arguments:
-  requirement           One or more requirement specifiers (for
-                        example: "requirement-name", "requirement-
-                        name[extra-a,extra-b]", ".[extra-a, extra-b]"
-                        or "../other-editable-package-
-                        directory[extra-a, extra-b]) and/or paths to a
-                        setup.py, setup.cfg, pyproject.toml, tox.ini or
-                        requirements.txt file
+  requirement           One or more requirement specifiers (for example: "requirement-
+                        name", "requirement-name[extra-a,extra-b]", ".[extra-a,
+                        extra-b]" or "../other-editable-package-directory[extra-a,
+                        extra-b]) and/or paths to a setup.py, setup.cfg,
+                        pyproject.toml, tox.ini or requirements.txt file
 
 optional arguments:
   -h, --help            show this help message and exit
   -e EXCLUDE, --exclude EXCLUDE
-                        A distribution (or comma-separated list of
-                        distributions) to exclude from the output
+                        A distribution (or comma-separated list of distributions) to
+                        exclude from the output
   -er EXCLUDE_RECURSIVE, --exclude-recursive EXCLUDE_RECURSIVE
-                        A distribution (or comma-separated list of
-                        distributions) to exclude from the output.
-                        Unlike -e / --exclude, this argument also
-                        precludes recursive requirement discovery for
-                        the specified packages, thereby excluding all
-                        of the excluded package's requirements which
-                        are not required by another (non-excluded)
-                        distribution.
+                        A distribution (or comma-separated list of distributions) to
+                        exclude from the output. Unlike -e / --exclude, this argument
+                        also precludes recursive requirement discovery for the
+                        specified packages, thereby excluding all of the excluded
+                        package's requirements which are not required by another (non-
+                        excluded) distribution.
   -nv NO_VERSION, --no-version NO_VERSION
-                        Don't include versions (only output
-                        distribution names) for packages matching
-                        this/these glob pattern(s) (note: the value
+                        Don't include versions (only output distribution names) for
+                        packages matching this/these glob pattern(s) (note: the value
                         must be single-quoted if it contains wildcards)
   -do, --dependency-order
-                        Sort requirements so that dependents precede
-                        dependencies
+                        Sort requirements so that dependents precede dependencies
   --reverse             Print requirements in reverse order
+  -d DEPTH, --depth DEPTH
+                        Depth of recursive requirement discovery
 ```
