@@ -2,9 +2,21 @@ import sys
 from functools import lru_cache
 from itertools import chain
 from traceback import format_exception
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Hashable, Iterable, List, Set
 
 import tomli
+
+
+def iter_distinct(items: Iterable[Hashable]) -> Iterable:
+    """
+    Yield distinct elements, preserving order
+    """
+    visited: Set[Hashable] = set()
+    item: Hashable
+    for item in items:
+        if item not in visited:
+            visited.add(item)
+            yield item
 
 
 @lru_cache()

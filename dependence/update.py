@@ -21,13 +21,12 @@ from typing import (
 
 import tomli
 import tomli_w
-from more_itertools import unique_everseen
 from packaging.requirements import Requirement
 from packaging.specifiers import Specifier, SpecifierSet
 from packaging.version import Version
 from packaging.version import parse as parse_version
 
-from ._utilities import iter_parse_delimited_values
+from ._utilities import iter_distinct, iter_parse_delimited_values
 from .utilities import (
     get_installed_distributions,
     is_requirement_string,
@@ -230,7 +229,7 @@ def get_updated_setup_cfg(
             # We pre-pend an empty requirement string in order to]
             # force new-line creation at the beginning of the extra
             extras_require[all_extra_name] = "\n".join(
-                unique_everseen([""] + all_extra_requirements)
+                iter_distinct([""] + all_extra_requirements)
             )
     # Return as a string
     setup_cfg: str
@@ -369,7 +368,7 @@ def get_updated_pyproject_toml(
             project_optional_dependencies[extra_name] = extra_requirements
         if all_extra_name:
             project_optional_dependencies[all_extra_name] = list(
-                unique_everseen(all_extra_requirements)
+                iter_distinct(all_extra_requirements)
             )
     if (
         build_system_requires

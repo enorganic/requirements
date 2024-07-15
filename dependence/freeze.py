@@ -5,9 +5,7 @@ from importlib.metadata import distribution as _get_distribution
 from itertools import chain
 from typing import Dict, Iterable, MutableSet, Optional, Tuple, cast
 
-from more_itertools import unique_everseen
-
-from ._utilities import iter_parse_delimited_values
+from ._utilities import iter_distinct, iter_parse_delimited_values
 from .utilities import (
     get_distribution,
     get_required_distribution_names,
@@ -113,7 +111,7 @@ def get_frozen_requirements(
     requirement_strings: MutableSet[str] = cast(
         MutableSet[str], requirements - requirement_files
     )
-    frozen_requirements: Iterable[str] = unique_everseen(
+    frozen_requirements: Iterable[str] = iter_distinct(
         chain(
             requirement_strings,
             *map(
@@ -213,7 +211,7 @@ def _iter_frozen_requirements(
         )
 
     distribution_names: MutableSet[str]
-    requirements: Iterable[str] = unique_everseen(
+    requirements: Iterable[str] = iter_distinct(
         chain(
             *map(
                 lambda distribution_names: get_required_distribution_names_(
