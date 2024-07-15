@@ -32,11 +32,14 @@ from typing import (
 from warnings import warn
 
 import tomli
-from more_itertools import unique_everseen
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 
-from ._utilities import append_exception_text, get_exception_text
+from ._utilities import (
+    append_exception_text,
+    get_exception_text,
+    iter_distinct,
+)
 
 _BUILTIN_DISTRIBUTION_NAMES: Tuple[str] = ("distribute",)
 
@@ -330,7 +333,7 @@ def _iter_setup_cfg_requirement_strings(path: str) -> Iterable[str]:
                     extra_requirements_string.split("\n"),
                 ),
             )
-    return unique_everseen(requirement_strings)
+    return iter_distinct(requirement_strings)
 
 
 def _iter_tox_ini_requirement_strings(path: str) -> Iterable[str]:
@@ -358,7 +361,7 @@ def _iter_tox_ini_requirement_strings(path: str) -> Iterable[str]:
             )
         return requirements
 
-    return unique_everseen(
+    return iter_distinct(
         chain(("tox",), *map(get_section_requirements, parser.sections()))
     )
 
@@ -836,7 +839,7 @@ def _iter_requirement_names(
     if distribution is None:
         return ()
     requirements: Tuple[Requirement, ...] = tuple(
-        unique_everseen(
+        iter_distinct(
             _iter_distribution_requirements(
                 distribution,
                 extras=extras,
@@ -918,7 +921,7 @@ def _iter_requirement_strings_required_distribution_names(
                 pass
         return set()
 
-    return unique_everseen(
+    return iter_distinct(
         chain(*map(get_required_distribution_names_, requirement_strings)),
     )
 
@@ -951,7 +954,7 @@ def get_requirements_required_distribution_names(
     name: str
     return set(
         _iter_requirement_strings_required_distribution_names(
-            unique_everseen(
+            iter_distinct(
                 chain(
                     requirement_strings,
                     *map(
