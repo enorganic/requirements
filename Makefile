@@ -6,15 +6,15 @@ install:
 	{ python$(PYTHON_VERSION) -m venv venv || py -$(PYTHON_VERSION) -m venv venv ; } && \
 	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
 	pip install --upgrade pip && \
-	pip install -c requirements.txt -e . && \
+	pip install -r requirements.txt -e . && \
 	{ mypy --install-types --non-interactive || echo "" ; } && \
 	echo "Installation complete"
 
 ci-install:
 	{ python3 -m venv venv || py -3 -m venv venv ; } && \
 	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	python3 -m pip install --upgrade pip && \
-	pip install -c requirements.txt daves-dev-tools tox -e . && \
+	pip install --upgrade pip && \
+	pip install -r requirements.txt -e . && \
 	echo "Installation complete"
 
 reinstall:
@@ -22,7 +22,7 @@ reinstall:
 	{ python$(PYTHON_VERSION) -m venv venv || py -$(PYTHON_VERSION) -m venv venv ; } && \
 	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
 	pip install --upgrade pip && \
-	pip install flake8 mypy black tox pytest isort daves-dev-tools -e . && \
+	pip install daves-dev-tools -r test_requirements.txt -e . && \
 	{ mypy --install-types --non-interactive || echo "" ; } && \
 	make requirements && \
 	echo "Installation complete"
@@ -53,13 +53,13 @@ upgrade:
 requirements:
 	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
 	dependence update\
-	 -aen all\
 	 setup.cfg pyproject.toml tox.ini && \
 	dependence freeze\
 	 -e pip\
 	 -e wheel\
 	 . pyproject.toml tox.ini daves-dev-tools\
-	 > requirements.txt
+	 > requirements.txt && \
+	dependence freeze -nv '*' -d 0 tox.ini > test_requirements.txt
 
 # Run all tests
 test:

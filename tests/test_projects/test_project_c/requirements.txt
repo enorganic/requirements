@@ -1,0 +1,7 @@
+mypy>=0.0.0
+flake8>=0.0.0
+tox>=0.0.0
+pytest~=0.0
+black>=0.0.0
+setuptools==0.0.0
+pip

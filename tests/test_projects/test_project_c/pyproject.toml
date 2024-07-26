@@ -1,0 +1,77 @@
+[build-system]
+requires = [
+    "setuptools>=0.0.0",
+    "wheel>=0.0.0",
+    "pip"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "test-project-c"
+version = "0.0.0"
+requires-python = ">=3.8"
+dependencies = [
+    "pip",
+    "setuptools>=0.0.0",
+    "more-itertools~=0.0",
+]
+
+[project.optional-dependencies]
+twine = ["twine>=0.0"]
+wheel = ["wheel>=0.0"]
+
+[tool.setuptools]
+packages = ["test_project_b"]
+
+[tool.black]
+line-length = 79
+target-version = [
+    "py38",
+    "py39",
+    "py310",
+    "py311",
+    "py312"
+]
+
+[tool.tox]
+legacy_tox_ini = """
+    [tox]
+    envlist = pytest, black, flake8, mypy, isort
+
+    [testenv:pytest]
+    deps =
+        -rrequirements.txt
+    commands =
+        py.test --doctest-modules
+
+    [testenv:black]
+    deps =
+        black
+        -crequirements.txt
+    commands =
+        black --check .
+
+    [testenv:flake8]
+    deps =
+        flake8
+        -crequirements.txt
+    commands =
+        flake8
+
+    [testenv:mypy]
+    deps =
+        mypy
+        pytest
+        -crequirements.txt
+    commands =
+        mypy --install-types --non-interactive
+        mypy
+
+    [testenv:isort]
+    deps =
+        isort
+        -crequirements.txt
+    commands =
+        isort -c .
+"""
+

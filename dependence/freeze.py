@@ -221,7 +221,6 @@ def _iter_frozen_requirements(
             )
         ),
     )
-
     requirements = map(get_requirement_string, requirements)
     return requirements
 

@@ -13,11 +13,12 @@ from itertools import chain
 from pathlib import Path
 from runpy import run_path
 from shutil import move, rmtree
-from subprocess import CalledProcessError, check_call, check_output
+from subprocess import CalledProcessError
 from tempfile import mkdtemp
 from types import ModuleType
 from typing import (
     IO,
+    AbstractSet,
     Any,
     Container,
     Dict,
@@ -37,6 +38,7 @@ from packaging.utils import canonicalize_name
 
 from ._utilities import (
     append_exception_text,
+    check_output,
     get_exception_text,
     iter_distinct,
 )
@@ -336,9 +338,28 @@ def _iter_setup_cfg_requirement_strings(path: str) -> Iterable[str]:
     return iter_distinct(requirement_strings)
 
 
-def _iter_tox_ini_requirement_strings(path: str) -> Iterable[str]:
+def _iter_tox_ini_requirement_strings(
+    path: Union[str, Path, ConfigParser] = "",
+    string: str = "",
+) -> Iterable[str]:
+    """
+    Parse a tox.ini file and yield the requirements found in the `deps`
+    options of each section.
+
+    Parameters:
+
+    - path (str|Path) = "": The path to a tox.ini file
+    - string (str) = "": The contents of a tox.ini file
+    """
     parser: ConfigParser = ConfigParser()
-    parser.read(path)
+    if path:
+        assert (
+            not string
+        ), "Either `path` or `string` arguments may be provided, but not both"
+        parser.read(path)
+    else:
+        assert string, "Either a `path` or `string` argument must be provided"
+        parser.read_string(string)
 
     def get_section_option_requirements(
         section_name: str, option_name: str
@@ -366,27 +387,112 @@ def _iter_tox_ini_requirement_strings(path: str) -> Iterable[str]:
     )
 
 
-def _iter_pyproject_toml_requirement_strings(path: str) -> Iterable[str]:
+def _iter_pyproject_toml_requirement_strings(
+    path: str,
+    exclude_build_system: bool = False,
+    exclude_project: bool = False,
+    exclude_project_dependencies: bool = False,
+    exclude_project_optional_dependencies: bool = False,
+    include_project_optional_dependencies: Iterable[str] = frozenset(),
+    exclude_tools: bool = False,
+    exclude_tox: bool = False,
+) -> Iterable[str]:
+    """
+    Read a pyproject.toml file and yield the requirements found.
+
+    - exclude_build_system (bool) = False: If `True`, build-system
+      requirements will not be included
+    - exclude_project (bool) = False: If `True`, build-system
+      requirements will not be included
+    - exclude_project_dependencies (bool) = False: If `True`, project
+      dependencies will not be included
+    - exclude_project_optional_dependencies (bool) = False: If `True`, project
+      optional dependencies will not be included
+    - include_project_optional_dependencies ({str}) = frozenset(): If a
+      non-empty set is provided, *only* dependencies for the specified extras
+      (options) will be included
+    - exclude_tools (bool) = False: If `True`, tool requirements will not be
+      included
+    - exclude_tox (bool) = False: If `True`, tool.tox dependencies will not be
+      included
+    """
+    include_project_optional_dependencies = (
+        include_project_optional_dependencies
+        if isinstance(include_project_optional_dependencies, set)
+        else frozenset(include_project_optional_dependencies)
+    )
     pyproject_io: IO[str]
     with open(path) as pyproject_io:
         pyproject: Dict[str, Any] = tomli.loads(pyproject_io.read())
-        if ("build-system" in pyproject) and (
-            "requires" in pyproject["build-system"]
+        # Build system requirements
+        if (
+            ("build-system" in pyproject)
+            and ("requires" in pyproject["build-system"])
+            and not exclude_build_system
         ):
             yield from pyproject["build-system"]["requires"]
-        if ("project" in pyproject) and (
-            "dependencies" in pyproject["project"]
-        ):
-            yield from pyproject["project"]["dependencies"]
-        if "project.optional-dependencies" in pyproject:
-            values: Iterable[str]
-            for values in pyproject["project.optional-dependencies"].values():
-                yield from values
+        # Project requirements
+        if ("project" in pyproject) and not exclude_project:
+            if (
+                "dependencies" in pyproject["project"]
+            ) and not exclude_project_dependencies:
+                yield from pyproject["project"]["dependencies"]
+            if (
+                "optional-dependencies" in pyproject["project"]
+            ) and not exclude_project_optional_dependencies:
+                key: str
+                values: Iterable[str]
+                for key, values in pyproject["project"][
+                    "optional-dependencies"
+                ].items():
+                    if (not include_project_optional_dependencies) or (
+                        key in include_project_optional_dependencies
+                    ):
+                        yield from values
+        # Tool Requirements
+        if ("tool" in pyproject) and not exclude_tools:
+            # Tox
+            if ("tox" in pyproject["tool"]) and not exclude_tox:
+                if "legacy_tox_ini" in pyproject["tool"]["tox"]:
+                    yield from _iter_tox_ini_requirement_strings(
+                        string=pyproject["tool"]["tox"]["legacy_tox_ini"]
+                    )
 
 
-def iter_configuration_file_requirement_strings(path: str) -> Iterable[str]:
+def iter_configuration_file_requirement_strings(
+    path: str,
+    exclude_build_system: bool = False,
+    exclude_project: bool = False,
+    exclude_project_dependencies: bool = False,
+    exclude_project_optional_dependencies: bool = False,
+    include_project_optional_dependencies: AbstractSet[str] = frozenset(),
+    exclude_tools: bool = False,
+    exclude_tox: bool = False,
+) -> Iterable[str]:
     """
     Read a configuration file and yield the parsed requirements.
+
+    Parameters:
+
+    - path (str): The path to a configuration file
+
+    Parameters only applicable to `pyproject.toml` files:
+
+    - exclude_build_system (bool) = False: If `True`, build-system
+      requirements will not be included
+    - exclude_project (bool) = False: If `True`, build-system
+      requirements will not be included
+    - exclude_project_dependencies (bool) = False: If `True`, project
+      dependencies will not be included
+    - exclude_project_optional_dependencies (bool) = False: If `True`, project
+      optional dependencies will not be included
+    - include_project_optional_dependencies ({str}) = frozenset(): If a
+      non-empty set is provided, *only* dependencies for the specified extras
+      (options) will be included
+    - exclude_tools (bool) = False: If `True`, tool requirements will not be
+      included
+    - exclude_tox (bool) = False: If `True`, tool.tox dependencies will not be
+      included
     """
     configuration_file_type: ConfigurationFileType = (
         get_configuration_file_type(path)
@@ -394,9 +500,22 @@ def iter_configuration_file_requirement_strings(path: str) -> Iterable[str]:
     if configuration_file_type == ConfigurationFileType.SETUP_CFG:
         return _iter_setup_cfg_requirement_strings(path)
     elif configuration_file_type == ConfigurationFileType.PYPROJECT_TOML:
-        return _iter_pyproject_toml_requirement_strings(path)
+        return _iter_pyproject_toml_requirement_strings(
+            path,
+            exclude_build_system=exclude_build_system,
+            exclude_project=exclude_project,
+            exclude_project_dependencies=exclude_project_dependencies,
+            exclude_project_optional_dependencies=(
+                exclude_project_optional_dependencies
+            ),
+            include_project_optional_dependencies=(
+                include_project_optional_dependencies
+            ),
+            exclude_tools=exclude_tools,
+            exclude_tox=exclude_tox,
+        )
     elif configuration_file_type == ConfigurationFileType.TOX_INI:
-        return _iter_tox_ini_requirement_strings(path)
+        return _iter_tox_ini_requirement_strings(path=path)
     else:
         assert (
             configuration_file_type == ConfigurationFileType.REQUIREMENTS_TXT
@@ -451,13 +570,7 @@ def _get_setup_py_metadata(path: str, args: Tuple[str, ...]) -> str:
         if os.path.isfile(path):
             command: Tuple[str, ...] = (sys.executable, path) + args
             try:
-                value = (
-                    check_output(
-                        command, encoding="utf-8", universal_newlines=True
-                    )
-                    .strip()
-                    .split("\n")[-1]
-                )
+                value = check_output(command).strip().split("\n")[-1]
             except CalledProcessError:
                 warn(
                     f"A package name could not be found in {path}, "
@@ -467,13 +580,7 @@ def _get_setup_py_metadata(path: str, args: Tuple[str, ...]) -> str:
                 # re-write egg info and attempt to get the name again
                 setup_egg_info(directory)
                 try:
-                    value = (
-                        check_output(
-                            command, encoding="utf-8", universal_newlines=True
-                        )
-                        .strip()
-                        .split("\n")[-1]
-                    )
+                    value = check_output(command).strip().split("\n")[-1]
                 except Exception:
                     warn(
                         f"A package name could not be found in {path}"
@@ -707,7 +814,7 @@ def _install_requirement_string(
         if editable:
             flags += ("-e",)
         try:
-            check_call(
+            check_output(
                 (
                     sys.executable,
                     "-m",
