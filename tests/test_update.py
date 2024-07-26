@@ -21,6 +21,9 @@ TEST_PROJECT_A: Path = (
 TEST_PROJECT_B: Path = (
     Path(__file__).absolute().parent.joinpath("test_projects/test_project_b/")
 )
+TEST_PROJECT_C: Path = (
+    Path(__file__).absolute().parent.joinpath("test_projects/test_project_c/")
+)
 
 
 def is_nonzero(value: int) -> bool:

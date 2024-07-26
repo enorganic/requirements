@@ -1,10 +1,30 @@
+import os
 import sys
 from functools import lru_cache
 from itertools import chain
+from subprocess import check_output as _check_output
+from tempfile import mktemp
 from traceback import format_exception
-from typing import Any, Dict, Hashable, Iterable, List, Set
+from typing import Any, Dict, Hashable, Iterable, List, Set, Tuple
 
 import tomli
+
+
+def check_output(command: Tuple[str, ...]) -> str:
+    """
+    This function wraps `subprocess.check_output`, but redirects stderr
+    to a temporary file, then deletes that file (a platform-independent
+    means of redirecting output to DEVNULL).
+
+    Parameters:
+
+    - command (Tuple[str, ...]): The command to run
+    """
+    stderr_path: str = mktemp()
+    with open(stderr_path, "w") as stderr:
+        output = _check_output(command, stderr=stderr, text=True)
+    os.remove(stderr_path)
+    return output
 
 
 def iter_distinct(items: Iterable[Hashable]) -> Iterable:
