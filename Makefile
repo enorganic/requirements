@@ -5,7 +5,7 @@ install:
 	{ rm -R venv || echo "" ; } && \
 	{ python$(PYTHON_VERSION) -m venv venv || py -$(PYTHON_VERSION) -m venv venv ; } && \
 	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	pip install --upgrade pip && \
+	python3 -m pip install --upgrade pip && \
 	pip install -r requirements.txt -e . && \
 	{ mypy --install-types --non-interactive || echo "" ; } && \
 	echo "Installation complete"
@@ -13,7 +13,7 @@ install:
 ci-install:
 	{ python3 -m venv venv || py -3 -m venv venv ; } && \
 	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	pip install --upgrade pip && \
+	python3 -m pip install --upgrade pip && \
 	pip install -r requirements.txt -e . && \
 	echo "Installation complete"
 
@@ -21,7 +21,7 @@ reinstall:
 	{ rm -R venv || echo "" ; } && \
 	{ python$(PYTHON_VERSION) -m venv venv || py -$(PYTHON_VERSION) -m venv venv ; } && \
 	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	pip install --upgrade pip && \
+	python3 -m pip install --upgrade pip && \
 	pip install daves-dev-tools -r test_requirements.txt -e . && \
 	{ mypy --install-types --non-interactive || echo "" ; } && \
 	make requirements && \
