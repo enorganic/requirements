@@ -1,9 +1,8 @@
-import os
 import sys
 from functools import lru_cache
 from itertools import chain
+from subprocess import DEVNULL
 from subprocess import check_output as _check_output
-from tempfile import mktemp
 from traceback import format_exception
 from typing import Any, Dict, Hashable, Iterable, List, Set, Tuple
 
@@ -20,11 +19,7 @@ def check_output(command: Tuple[str, ...]) -> str:
 
     - command (Tuple[str, ...]): The command to run
     """
-    stderr_path: str = mktemp()
-    with open(stderr_path, "w") as stderr:
-        output = _check_output(command, stderr=stderr, text=True)
-    os.remove(stderr_path)
-    return output
+    return _check_output(command, stderr=DEVNULL, text=True)
 
 
 def iter_distinct(items: Iterable[Hashable]) -> Iterable:
