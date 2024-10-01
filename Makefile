@@ -2,7 +2,6 @@ SHELL := bash
 PYTHON_VERSION := 3.8
 
 install:
-	{ rm -R venv || echo "" ; } && \
 	{ python$(PYTHON_VERSION) -m venv venv || py -$(PYTHON_VERSION) -m venv venv ; } && \
 	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
 	python3 -m pip install --upgrade pip && \

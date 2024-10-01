@@ -6,15 +6,14 @@ from collections import deque
 from configparser import ConfigParser, SectionProxy
 from enum import Enum, auto
 from glob import iglob
-from importlib.metadata import Distribution, PackageNotFoundError, PackagePath
+from importlib.metadata import Distribution, PackageNotFoundError
 from importlib.metadata import distribution as _get_distribution
 from importlib.metadata import distributions as _get_distributions
 from itertools import chain
 from pathlib import Path
 from runpy import run_path
-from shutil import move, rmtree
-from subprocess import CalledProcessError
-from tempfile import mkdtemp
+from shutil import rmtree
+from subprocess import CalledProcessError, list2cmdline
 from types import ModuleType
 from typing import (
     IO,
@@ -39,6 +38,7 @@ from packaging.utils import canonicalize_name
 from ._utilities import (
     append_exception_text,
     check_output,
+    deprecated,
     get_exception_text,
     iter_distinct,
 )
@@ -172,63 +172,6 @@ def cache_clear() -> None:
     get_requirement_string_distribution_name.cache_clear()
 
 
-def _iter_find_dist_info(directory: Path, name: str) -> Iterable[Path]:
-    """
-    Find all *.dist-info directories for a project in the specified directory
-    (there shouldn't be more than one, but pip issues can cause there to
-    be on occasions).
-    """
-    yield from filter(
-        Path.is_dir,
-        directory.glob(f"{name.replace('-', '_')}" "-*.dist-info"),
-    )
-
-
-def _move_dist_info_to_temp_directory(dist_info_directory: Path) -> Path:
-    """
-    Move the contents of *.dist-info directories for a project into a temporary
-    directory, and return the path to that temp directory.
-    """
-    temp_directory: Path = Path(mkdtemp())
-    file_path: Path
-    for file_path in dist_info_directory.iterdir():
-        move(str(file_path), temp_directory.joinpath(file_path.name))
-    rmtree(dist_info_directory)
-    return temp_directory
-
-
-def _merge_directories(
-    source_directory: Path, target_directory: Path, overwrite: bool = False
-) -> None:
-    source_file_path: Path
-    target_file_path: Path
-    if not target_directory.exists():
-        target_directory.mkdir()
-    for source_file_path in source_directory.iterdir():
-        target_file_path = target_directory.joinpath(source_file_path.name)
-        if overwrite or (not target_file_path.exists()):
-            move(str(source_file_path), target_file_path)
-    rmtree(source_directory)
-
-
-def _get_distribution_dist_info_path(
-    distribution: Distribution,
-) -> Optional[Path]:
-    """
-    Get the dist-info directory for a distribution
-    (a safer method for accessing the equivalent of `distribution._path`)
-    """
-    return distribution._path  # type: ignore
-    if distribution.files is None:
-        return None
-    package_path: PackagePath
-    for package_path in distribution.files:
-        directory = Path(package_path.locate()).parent
-        if directory.name.endswith(".dist-info"):
-            return directory
-    return None
-
-
 def refresh_editable_distributions() -> None:
     """
     Update distribution information for editable installs
@@ -236,31 +179,7 @@ def refresh_editable_distributions() -> None:
     name: str
     location: str
     for name, location in get_editable_distributions_locations().items():
-        distribution: Distribution = _get_distribution(name)
-        dist_info_path: Optional[Path] = _get_distribution_dist_info_path(
-            distribution
-        )
-        if dist_info_path is None:
-            continue
-        dist_info_directory: Path = dist_info_path.parent
-        location_path: Path = Path(location)
-        # Find pre-existing dist-info directories, and rename them so that
-        # the new dist-info directory doesn't overwrite the old one, then
-        # merge the two directories, replacing old files with new files
-        # when they exist in both
-        temp_directory: Path = _move_dist_info_to_temp_directory(
-            dist_info_path
-        )
-        try:
-            setup_egg_info(location_path)
-            if dist_info_directory != location_path:
-                setup_dist_info(location_path, dist_info_directory)
-        finally:
-            _merge_directories(
-                temp_directory,
-                dist_info_path,
-                overwrite=False,
-            )
+        _install_requirement_string(location, name=name, editable=True)
 
 
 @functools.lru_cache()
@@ -652,6 +571,7 @@ def _setup_location(
         os.chdir(current_directory)
 
 
+@deprecated()
 def setup_dist_egg_info(directory: str) -> None:
     """
     Refresh dist-info and egg-info for the editable package installed in
@@ -673,6 +593,7 @@ def get_editable_distribution_location(name: str) -> str:
     return get_editable_distributions_locations().get(normalize_name(name), "")
 
 
+@deprecated()
 def setup_dist_info(
     directory: Union[str, Path], output_dir: Union[str, Path] = ""
 ) -> None:
@@ -685,13 +606,13 @@ def setup_dist_info(
     directory = directory.absolute()
     if not directory.is_dir():
         directory = directory.parent
-    if isinstance(output_dir, Path):
-        output_dir = str(output_dir)
-    return _setup_location(
+    if isinstance(output_dir, str) and output_dir:
+        output_dir = Path(output_dir)
+    _setup_location(
         directory,
         (
             ("-q", "dist_info")
-            + (("--output-dir", output_dir) if output_dir else ()),
+            + (("--output-dir", str(output_dir)) if output_dir else ()),
         ),
     )
 
@@ -699,7 +620,7 @@ def setup_dist_info(
 def setup_egg_info(directory: Union[str, Path], egg_base: str = "") -> None:
     """
     Refresh egg-info for the editable package installed in
-    `directory`
+    `directory` (only applicable for packages using a `setup.py` script)
     """
     if isinstance(directory, str):
         directory = Path(directory)
@@ -715,7 +636,7 @@ def setup_egg_info(directory: Union[str, Path], egg_base: str = "") -> None:
             dist_info_path: Path = Path(dist_info)
             if not dist_info_path.joinpath("RECORD").is_file():
                 rmtree(dist_info_path)
-    return _setup_location(
+    _setup_location(
         directory,
         (("-q", "egg_info") + (("--egg-base", egg_base) if egg_base else ()),),
     )
@@ -808,46 +729,61 @@ def _install_requirement_string(
     name: str = "",
     editable: bool = False,
 ) -> None:
-    uncaught_error: Optional[Exception] = None
-    flags: Tuple[str, ...]
-    for flags in ((),) + ((("--force-reinstall",),) if editable else ()):
-        if editable:
-            flags += ("-e",)
-        try:
-            check_output(
-                (
-                    sys.executable,
-                    "-m",
-                    "pip",
-                    "install",
-                    "--no-deps",
-                    "--no-compile",
-                    "--no-build-isolation",
-                )
-                + flags
-                + (requirement_string,)
-            )
-            uncaught_error = None
-            break
-        except CalledProcessError as error:
-            if (uncaught_error is None) or (not flags):
-                uncaught_error = error
-    if uncaught_error is not None:
-        append_exception_text(
-            uncaught_error,
-            (
-                (
-                    f"\nCould not install {name}"
-                    if name == requirement_string
-                    else (
-                        f"\nCould not install {name} from {requirement_string}"
-                    )
-                )
-                if name
-                else (f"\nCould not install {requirement_string}")
-            ),
+    """
+    Install a requirement string with no dependencies, compilation, build
+    isolation, etc.
+    """
+    command: Tuple[str, ...] = (
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--no-deps",
+        "--no-compile",
+        "--no-build-isolation",
+    )
+    if editable:
+        command += (
+            "-e",
+            requirement_string,
+            "--config-settings",
+            "editable_mode=compat",
         )
-        raise uncaught_error
+    else:
+        command += (requirement_string,)
+    try:
+        check_output(command)
+    except CalledProcessError as error:
+        message: str = (
+            (
+                f"\n{list2cmdline(command)}" f"\nCould not install {name}"
+                if name == requirement_string
+                else (
+                    f"\n{list2cmdline(command)}"
+                    f"\nCould not install {name} from "
+                    f"{requirement_string}"
+                )
+            )
+            if name
+            else (
+                f"\n{list2cmdline(command)}"
+                f"\nCould not install {requirement_string}"
+            )
+        )
+        if not editable:
+            append_exception_text(
+                error,
+                message,
+            )
+            raise error
+        try:
+            check_output(command + ("--force-reinstall",))
+        except CalledProcessError as retry_error:
+            append_exception_text(
+                retry_error,
+                message,
+            )
+            raise retry_error
 
 
 def _install_requirement(
@@ -1000,6 +936,7 @@ def _iter_requirement_names(
     return requirement_names
 
 
+@deprecated()
 def _iter_requirement_strings_required_distribution_names(
     requirement_strings: Iterable[str],
     echo: bool = False,
@@ -1033,6 +970,7 @@ def _iter_requirement_strings_required_distribution_names(
     )
 
 
+@deprecated()
 def get_requirements_required_distribution_names(
     requirements: Iterable[str] = (),
     echo: bool = False,
@@ -1075,6 +1013,7 @@ def get_requirements_required_distribution_names(
     )
 
 
+@deprecated()
 def iter_distribution_location_file_paths(location: str) -> Iterable[str]:
     location = os.path.abspath(location)
     name: str = get_setup_distribution_name(location)
