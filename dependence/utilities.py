@@ -755,7 +755,6 @@ def _install_requirement_string(
     else:
         command += (requirement_string,)
     try:
-        # print(list2cmdline(command))
         check_output(command)
     except CalledProcessError as error:
         message: str = (
