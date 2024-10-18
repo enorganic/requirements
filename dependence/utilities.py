@@ -746,12 +746,16 @@ def _install_requirement_string(
         command += (
             "-e",
             requirement_string,
-            "--config-settings",
-            "editable_mode=compat",
         )
+        if sys.version_info < (3, 9):
+            command += (
+                "--config-settings",
+                "editable_mode=compat",
+            )
     else:
         command += (requirement_string,)
     try:
+        # print(list2cmdline(command))
         check_output(command)
     except CalledProcessError as error:
         message: str = (
