@@ -9,7 +9,7 @@ on:
     - setup.cfg
     - pyproject.toml
     - tests/**
-    - requirements.txt
+    - frozen_requirements.txt
     - tox.ini
     - .github/**
 jobs:

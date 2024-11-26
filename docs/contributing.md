@@ -1,44 +1,43 @@
 # Contributing to dependence
 
-## For Contributors and Code Owners
+## For Enorganic Contributors and Code Owners
 
-1. Clone and Install
+1.  Clone and Install
 
     To install this project for development of *this library*,
     clone this repository (replacing "~/Code", below, with the directory
     under which you want your project to reside), then run `make`:
 
-    ```shell script
+    ```bash
     cd ~/Code && \
     git clone\
-    https://github.com/enorganic/dependence.git\
-    dependence && \
+    https://github.com/enorganic/dependence.git dependence && \
     cd dependence && \
     make
     ```
 
-2. Create a new branch for your changes (replacing "descriptive-branch-name"
-   with a *descriptive branch name*, and replacing *feature* with *bugfix*
-   if the branch addresses a bug):
+2.  Create a new branch for your changes (replacing "descriptive-branch-name"
+    with a *descriptive branch name*, and replacing *feature* with *bugfix*
+    if the branch addresses a bug):
 
     ```shell
     git branch feature/descriptive-branch-name
     ```
 
-3. Make some changes.
-4. Format and lint your code:
+3.  Make some changes.
+4.  Format and lint your code:
 
     ```shell
     make format
     ```
 
-5. Test your changes:
+5.  Test your changes:
 
     ```shell
     make test
     ```
 
-6. Push your changes and create a pull request.
+6.  Push your changes and create a pull request.
 
 ## For Everyone Else
 

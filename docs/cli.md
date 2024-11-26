@@ -1,26 +1,4 @@
-# dependence
-
-[![test](https://github.com/enorganic/dependence/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/enorganic/dependence/actions/workflows/test.yml)
-[![PyPI version](https://badge.fury.io/py/dependence.svg?icon=si%3Apython)](https://badge.fury.io/py/dependence)
-
-This project provides a Command Line Interface and library for inspecting
-and updating python project dependency versions in setup.cfg, pyproject.toml,
-and requirements.txt files.
-
-- [Documentation](https://enorganic.github.io/dependence/)
-- [Contributing](https://enorganic.github.io/dependence/contributing)
-
-## Installation
-
-You can install `dependence` with pip:
-
-```shell
-pip3 install dependence
-```
-
-## Usage
-
-### Command Line Interface
+# Command Line Interface
 
 ```console
 $ dependence -h
@@ -36,7 +14,7 @@ Commands:
                               to the output of `pip freeze`.
 ```
 
-#### dependence update
+## dependence update
 
 This command will update version specifiers for
 all package requirements in your setup.cfg, pyproject.toml, tox.ini,
@@ -77,7 +55,7 @@ Example:
 dependence update -aen all setup.cfg pyproject.toml tox.ini
 ```
 
-#### dependence freeze
+## dependence freeze
 
 ```console
 $ dependence freeze -h
