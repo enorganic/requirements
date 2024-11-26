@@ -3,15 +3,12 @@ site_url: https://enorganic.github.io/dependence/
 repo_url: https://github.com/enorganic/dependence/
 edit_uri: blob/main/docs/
 nav:
-
 - Introduction: 'index.md'
 - CLI Reference: 'cli.md'
 - API Reference:
     - freeze: 'api/freeze.md'
     - update: 'api/update.md'
 - Contributing: 'contributing.md'
-
-
 theme:
   name: material
   color_mode: auto
