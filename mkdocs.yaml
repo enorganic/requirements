@@ -9,6 +9,7 @@ nav:
 - API Reference:
     - freeze: 'api/freeze.md'
     - update: 'api/update.md'
+- Contributing: 'contributing.md'
 
 
 theme:
