@@ -14,7 +14,7 @@ TEST_PROJECT_B: Path = (
     Path(__file__).absolute().parent.joinpath("test_projects/test_project_b/")
 )
 REQUIREMENTS_A: Tuple[str, ...] = (
-    str(TEST_PROJECT_A.joinpath("requirements.txt")),
+    str(TEST_PROJECT_A.joinpath("frozen_dev_requirements.txt")),
     str(TEST_PROJECT_A.joinpath("setup.cfg")),
     str(TEST_PROJECT_A.joinpath("pyproject.toml")),
 )
