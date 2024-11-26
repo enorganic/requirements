@@ -177,7 +177,7 @@ def test_get_updated_requirements_txt() -> None:
     project: Path
     for project in (TEST_PROJECT_A, TEST_PROJECT_B):
         requirements_txt_path: Path = project.joinpath(
-            "frozen_dev_requirements.txt"
+            "frozen_requirements.txt"
         )
         with open(requirements_txt_path) as requirements_txt_io:
             requirements_txt_data: str = requirements_txt_io.read()
