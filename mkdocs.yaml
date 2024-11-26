@@ -1,0 +1,63 @@
+site_name: dependence
+site_url: https://enorganic.github.io/dependence/
+repo_url: https://github.com/enorganic/dependence/
+edit_uri: blob/main/docs/
+nav:
+
+- Introduction: 'index.md'
+- CLI Reference: 'cli.md'
+- API Reference:
+    - freeze: 'api/freeze.md'
+    - update: 'api/update.md'
+
+
+theme:
+  name: material
+  color_mode: auto
+  user_color_mode_toggle: true
+  locale: en
+  features:
+    - navigation.top
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/link
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch-off
+        name: Switch to system preference
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings
+  - mermaid2:
+      arguments:
+        securityLevel: 'loose'
+        theme: |
+          ^(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_div_format
+  - pymdownx.highlight
+  - pymdownx.snippets
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+extra_css:
+  - assets/stylesheets/style.css
+extra_javascript:
+  - assets/javascripts/extra.js
