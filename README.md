@@ -4,8 +4,8 @@
 [![PyPI version](https://badge.fury.io/py/dependence.svg?icon=si%3Apython)](https://badge.fury.io/py/dependence)
 
 This project provides a Command Line Interface and library for inspecting
-and updating python project dependency versions in setup.cfg, pyproject.toml,
-and requirements.txt files.
+and updating requirement versions for dependencies in setup.cfg,
+pyproject.toml, requirements.txt, and tox.ini files.
 
 - [Documentation](https://enorganic.github.io/dependence/)
 - [Contributing](https://enorganic.github.io/dependence/contributing)
