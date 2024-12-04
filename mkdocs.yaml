@@ -8,7 +8,6 @@ nav:
 - API Reference:
     - freeze: 'api/freeze.md'
     - update: 'api/update.md'
-    - utilities: 'api/utilities.md'
 - Contributing: 'contributing.md'
 theme:
   name: material
