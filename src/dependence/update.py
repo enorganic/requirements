@@ -537,9 +537,9 @@ def main() -> None:
         type=str,
         help=(
             "If provided, an extra which consolidates the requirements "
-            "for all other extras will be added/updated to setup.cfg "
+            "for all other extras will be added/updated to pyproject.toml "
             "or setup.cfg (this argument is ignored for "
-            "requirements.txt files)"
+            "requirements.txt files and other TOML files)"
         ),
     )
     parser.add_argument(
@@ -567,7 +567,7 @@ def main() -> None:
         nargs="+",
         type=str,
         help=(
-            "One or more local paths to a setup.cfg, setup.cfg, "
+            "One or more local paths to a *.toml, setup.cfg, "
             "and/or requirements.txt file"
         ),
     )
