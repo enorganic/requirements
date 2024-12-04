@@ -3,16 +3,23 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-    - dependence/**
-    - pyproject.toml
-    - setup.py
-    - setup.cfg
+    - src/**
     - pyproject.toml
     - tests/**
-    - frozen_requirements.txt
-    - tox.ini
-    - .github/**
+    - "*_requirements.txt"
+    - .github/workflows/test.yml
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.8
+    - name: Install Hatch
+      uses: pypa/hatch@install
+    - run: hatch run lint
   test:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -27,13 +34,14 @@ jobs:
         - '3.10'
         - 3.11
         - 3.12
+        - 3.13
     steps:
     - uses: actions/checkout@v4
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python }}
-    - name: install
-      run: make ci-install
+    - name: Install Hatch
+      uses: pypa/hatch@install
     - name: test
-      run: make test
+      run: hatch run test:test

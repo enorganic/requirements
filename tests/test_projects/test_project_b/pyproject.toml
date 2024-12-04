@@ -13,12 +13,12 @@ requires-python = ">=3.8"
 dependencies = [
     "pip",
     "setuptools>=0.0.0",
-    "more-itertools~=0.0",
+    "ruff~=0.0",
 ]
 
 [project.optional-dependencies]
-twine = ["twine>=0.0"]
-wheel = ["wheel>=0.0"]
+jsonpointer = ["jsonpointer>=0.0"]
+mypy = ["mypy>=0.0"]
 
 [tool.setuptools]
 packages = ["test_project_b"]

@@ -40,11 +40,6 @@ plugins:
   - search
   - autorefs
   - mkdocstrings
-  - mermaid2:
-      arguments:
-        securityLevel: 'loose'
-        theme: |
-          ^(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'
   - mkdocstrings:
       default_handler: python
       handlers:
