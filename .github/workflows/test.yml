@@ -6,7 +6,7 @@ on:
     - src/**
     - pyproject.toml
     - tests/**
-    - requirements.txt
+    - *_requirements.txt
     - tox.ini
     - .github/workflows/test.yml
 jobs:
@@ -31,7 +31,5 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python }}
-    - name: install
-      run: make ci-install
     - name: test
       run: make test
