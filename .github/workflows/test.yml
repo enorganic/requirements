@@ -9,6 +9,17 @@ on:
     - "*_requirements.txt"
     - .github/workflows/test.yml
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.8
+    - name: Install Hatch
+      uses: pypa/hatch@install
+    - run: hatch run lint
   test:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -33,4 +44,4 @@ jobs:
     - name: Install Hatch
       uses: pypa/hatch@install
     - name: test
-      run: make test
+      run: hatch run test:test

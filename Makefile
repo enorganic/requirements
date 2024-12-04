@@ -1,6 +1,4 @@
 SHELL := bash
-# This is the version of python used for linting
-LINT_PYTHON_VERSION := 3.8
 .PHONY: docs
 
 # Create all environments
@@ -87,12 +85,9 @@ requirements:
 	 pyproject.toml \
 	 > test_requirements.txt
 
-# Run all tests
+# Test & check linting/formatting (for local use only)
 test:
-	if [[ "$$(python -V)" = "Python $(LINT_PYTHON_VERSION)."* ]] ;\
-	then hatch run lint && hatch run test:test ;\
-	else hatch run test:test ;\
-	fi
+	hatch run lint && hatch run test:test
 
 format:
 	hatch run ruff check --select I --fix . && \
