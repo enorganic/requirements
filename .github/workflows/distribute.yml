@@ -34,7 +34,7 @@ jobs:
     - name: create release
       env:
         GH_TOKEN: ${{ github.token }}
-      run: gh release create "$(venv/bin/python setup.py --version)" || echo "Release already exists"
+      run: gh release create "$(hatch version)" || echo "Release already exists"
     - name: distribute
       env:
         HATCH_INDEX_USER: ${{ secrets.PYPI_USERNAME }}
