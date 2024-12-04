@@ -6,7 +6,7 @@ on:
     - src/**
     - pyproject.toml
     - tests/**
-    - *_requirements.txt
+    - "*_requirements.txt"
     - tox.ini
     - .github/workflows/test.yml
 jobs:
