@@ -39,19 +39,6 @@ from ._utilities import (
 )
 
 
-def get_updated_requirement_string(
-    requirement_string: str, ignore: Iterable[str] = ()
-) -> str:
-    """
-    This function accepts a requirement string, and returns a requirement
-    string updated to reflect the version of the requirement installed
-    in the current environment
-    """
-    return _get_updated_requirement_string(
-        requirement_string, set(map(normalize_name, ignore))
-    )
-
-
 @dataclass
 class _Version:
     """
@@ -161,7 +148,9 @@ def _normalize_ignore_argument(ignore: Iterable[str]) -> Set[str]:
     return ignore_set
 
 
-def get_updated_requirements_txt(data: str, ignore: Iterable[str] = ()) -> str:
+def _get_updated_requirements_txt(
+    data: str, ignore: Iterable[str] = ()
+) -> str:
     """
     Return the contents of a *requirements.txt* file, updated to reflect the
     currently installed project versions, excluding those specified in
@@ -180,7 +169,7 @@ def get_updated_requirements_txt(data: str, ignore: Iterable[str] = ()) -> str:
     return "\n".join(map(get_updated_requirement_string, data.split("\n")))
 
 
-def get_updated_setup_cfg(
+def _get_updated_setup_cfg(
     data: str, ignore: Iterable[str] = (), all_extra_name: str = ""
 ) -> str:
     """
@@ -246,7 +235,7 @@ def get_updated_setup_cfg(
         return f"{setup_cfg}\n"
 
 
-def get_updated_tox_ini(data: str, ignore: Iterable[str] = ()) -> str:
+def _get_updated_tox_ini(data: str, ignore: Iterable[str] = ()) -> str:
     """
     Return the contents of a **tox.ini** file, updated to reflect the
     currently installed project versions, excluding those specified in
@@ -447,7 +436,7 @@ def _update(
         get_configuration_file_type(path)
     )
     if configuration_file_type == ConfigurationFileType.SETUP_CFG:
-        update_function = get_updated_setup_cfg
+        update_function = _get_updated_setup_cfg
         if all_extra_name:
             kwargs["all_extra_name"] = all_extra_name
     elif configuration_file_type == ConfigurationFileType.PYPROJECT_TOML:
@@ -464,9 +453,9 @@ def _update(
             exclude_pointers=exclude_pointers,
         )
     elif configuration_file_type == ConfigurationFileType.TOX_INI:
-        update_function = get_updated_tox_ini
+        update_function = _get_updated_tox_ini
     elif configuration_file_type == ConfigurationFileType.REQUIREMENTS_TXT:
-        update_function = get_updated_requirements_txt
+        update_function = _get_updated_requirements_txt
     else:
         raise NotImplementedError(
             f"Updating requirements for {path} is not supported"
