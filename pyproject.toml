@@ -62,6 +62,7 @@ python = "3.13"
 dependencies = [
     "mkdocs-material",
     "mkdocstrings[python]",
+    "black",
 ]
 
 [tool.hatch.envs.docs.env-vars]
@@ -102,3 +103,14 @@ max-complexity = 10
 [tool.ruff.format]
 docstring-code-format = true
 docstring-code-line-length = 20
+
+[tool.black]
+line-length = 79
+target-version = [
+    "py38",
+    "py39",
+    "py310",
+    "py311",
+    "py312",
+    "py313",
+]

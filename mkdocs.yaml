@@ -49,6 +49,8 @@ plugins:
             show_root_heading: true
             show_source: true
             show_signature_annotations: true
+            signature_crossrefs: true
+            separate_signature: true
             inherited_members: true
             heading_level: 1
             separate_signature: true
