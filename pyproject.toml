@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dependence"
-version = "1.0.0"
+version = "1.0.1"
 description = "A dependency management tool for python projects"
 readme = "README.md"
 license = "MIT"

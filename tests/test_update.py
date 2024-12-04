@@ -11,8 +11,8 @@ from packaging.version import Version
 
 from dependence.update import (
     _get_updated_pyproject_toml,
-    get_updated_requirements_txt,
-    get_updated_setup_cfg,
+    _get_updated_requirements_txt,
+    _get_updated_setup_cfg,
 )
 
 TEST_PROJECT_A: Path = (
@@ -87,7 +87,7 @@ def test_get_updated_setup_cfg() -> None:
         setup_cfg_data: str = setup_cfg_io.read()
         # Update versions for all packages *except* pip
         print(setup_cfg_data)
-        updated_setup_cfg_data = get_updated_setup_cfg(
+        updated_setup_cfg_data = _get_updated_setup_cfg(
             setup_cfg_data,
             ignore=("pip", "setuptools"),
             all_extra_name="all",
@@ -179,7 +179,7 @@ def test_get_updated_requirements_txt() -> None:
         requirements_txt_path: Path = project.joinpath("requirements.txt")
         with open(requirements_txt_path) as requirements_txt_io:
             requirements_txt_data: str = requirements_txt_io.read()
-            updated_requirements_txt_data: str = get_updated_requirements_txt(
+            updated_requirements_txt_data: str = _get_updated_requirements_txt(
                 requirements_txt_data, ignore=("pip", "setuptools")
             )
             print(
