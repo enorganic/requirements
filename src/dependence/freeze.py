@@ -1,18 +1,20 @@
 import argparse
 from fnmatch import fnmatch
+from functools import partial
 from importlib.metadata import Distribution
 from importlib.metadata import distribution as _get_distribution
 from itertools import chain
 from typing import Dict, Iterable, MutableSet, Optional, Tuple, cast
 
-from ._utilities import iter_distinct, iter_parse_delimited_values
-from .utilities import (
+from ._utilities import (
     get_distribution,
     get_required_distribution_names,
     get_requirement_string_distribution_name,
     install_requirement,
     is_configuration_file,
     iter_configuration_file_requirement_strings,
+    iter_distinct,
+    iter_parse_delimited_values,
     normalize_name,
 )
 
@@ -40,12 +42,15 @@ def _iter_sort_dependents_last(requirements: Iterable[str]) -> Iterable[str]:
         dependent: str
         dependencies: MutableSet[str]
         item: Tuple[str, MutableSet[str]]
-        for dependent, dependencies in sorted(
+        for dependent, dependencies in sorted(  # noqa: C414
             tuple(dependent_dependencies.items()),
             key=lambda item: item[0].lower(),
         ):
 
-            def is_non_circular_requirement(dependency: str) -> bool:
+            def is_non_circular_requirement(
+                dependency: str,
+                dependent: str,
+            ) -> bool:
                 """
                 Return `True` if the dependency is still among the unaccounted
                 for requirements, and is not a circular reference
@@ -53,13 +58,12 @@ def _iter_sort_dependents_last(requirements: Iterable[str]) -> Iterable[str]:
                 return (dependency in dependent_dependencies) and (
                     # Exclude interdependent distributions
                     # (circular references)
-                    dependent
-                    not in dependent_dependencies[dependency]
+                    dependent not in dependent_dependencies[dependency]
                 )
 
             if (not dependencies) or not any(
                 map(
-                    is_non_circular_requirement,
+                    partial(is_non_circular_requirement, dependent=dependent),
                     dependencies,
                 )
             ):
@@ -75,30 +79,35 @@ def get_frozen_requirements(
     dependency_order: bool = False,
     reverse: bool = False,
     depth: Optional[int] = None,
+    include_pointers: Tuple[str, ...] = (),
+    exclude_pointers: Tuple[str, ...] = (),
 ) -> Tuple[str, ...]:
     """
     Get the (frozen) requirements for one or more specified distributions or
     configuration files.
 
     Parameters:
-
-    - requirements ([str]): One or more requirement specifiers (for example:
-      "requirement-name[extra-a,extra-b]" or ".[extra-a, extra-b]) and/or paths
-      to a setup.cfg, pyproject.toml, tox.ini or requirements.txt file
-    - exclude ([str]): One or more distributions to exclude/ignore
-    - exclude_recursive ([str]): One or more distributions to exclude/ignore.
-      Note: Excluding a distribution here excludes all requirements which would
-      be identified through recursively.
-      those requirements occur elsewhere.
-    - no_version ([str]) = (): Exclude version numbers from the output
-      (only return distribution names)
-    - dependency_order (bool) = False: Sort requirements so that dependents
-      precede dependencies
-    - depth (int|None) = None: Depth of recursive requirement discovery
+        requirements: One or more requirement specifiers (for example:
+            "requirement-name[extra-a,extra-b]" or ".[extra-a, extra-b]) and/or
+            paths to a setup.cfg, pyproject.toml, tox.ini or requirements.txt
+            file
+        exclude: One or more distributions to exclude/ignore
+        exclude_recursive: One or more distributions to exclude/ignore.
+            Note: Excluding a distribution here excludes all requirements which
+            would be identified through recursion.
+        no_version: Exclude version numbers from the output
+            (only return distribution names)
+        dependency_order: Sort requirements so that dependents
+            precede dependencies
+        depth: Depth of recursive requirement discovery
+        include_pointers: A tuple of JSON pointers indicating elements to
+            include (defaults to all elements). Only applies to TOML files.
+        exclude_pointers: A tuple of JSON pointers indicating elements to
+            exclude (defaults to no exclusions). Only applies to TOML files.
     """
     # Separate requirement strings from requirement files
     if isinstance(requirements, str):
-        requirements = set((requirements,))
+        requirements = {requirements}
     else:
         requirements = set(requirements)
     if isinstance(no_version, str):
@@ -115,7 +124,11 @@ def get_frozen_requirements(
         chain(
             requirement_strings,
             *map(
-                iter_configuration_file_requirement_strings,
+                partial(
+                    iter_configuration_file_requirement_strings,
+                    include_pointers=include_pointers,
+                    exclude_pointers=exclude_pointers,
+                ),
                 requirement_files,
             ),
         )
@@ -210,14 +223,14 @@ def _iter_frozen_requirements(
             distribution_names - exclude,
         )
 
-    distribution_names: MutableSet[str]
+    requirement_string: str
     requirements: Iterable[str] = iter_distinct(
         chain(
-            *map(
-                lambda distribution_names: get_required_distribution_names_(
-                    distribution_names, None if (depth is None) else depth - 1
-                ),
-                requirement_strings,
+            *(
+                get_required_distribution_names_(
+                    requirement_string, None if (depth is None) else depth - 1
+                )
+                for requirement_string in requirement_strings
             )
         ),
     )
@@ -233,28 +246,32 @@ def freeze(
     dependency_order: bool = False,
     reverse: bool = False,
     depth: Optional[int] = None,
+    include_pointers: Tuple[str, ...] = (),
+    exclude_pointers: Tuple[str, ...] = (),
 ) -> None:
     """
     Print the (frozen) requirements for one or more specified requirements or
     configuration files.
 
     Parameters:
-
-    - requirements ([str]): One or more requirement specifiers (for example:
-      "requirement-name[extra-a,extra-b]" or ".[extra-a, extra-b]) and/or paths
-      to a setup.py, setup.cfg, pyproject.toml, tox.ini or requirements.txt
-      file
-    - exclude ([str]): One or more distributions to exclude/ignore
-    - exclude_recursive ([str]): One or more distributions to exclude/ignore.
-      Note: Excluding a distribution here excludes all requirements which would
-      be identified through recursively.
-      those requirements occur elsewhere.
-    - no_version ([str]) = (): Exclude version numbers from the output
-      (only print distribution names) for package names matching any of these
-      patterns
-    - dependency_order (bool) = False: Sort requirements so that dependents
-      precede dependencies
-    - depth (int|None) = None: Depth of recursive requirement discovery
+        requirements: One or more requirement specifiers (for example:
+            "requirement-name[extra-a,extra-b]" or ".[extra-a, extra-b]) and/or
+            paths to a setup.py, setup.cfg, pyproject.toml, tox.ini or
+            requirements.txt file
+        exclude: One or more distributions to exclude/ignore
+        exclude_recursive: One or more distributions to exclude/ignore.
+            Note: Excluding a distribution here halts recursive
+            discovery of requirements.
+        no_version: Exclude version numbers from the output
+            (only print distribution names) for package names matching any of
+            these patterns
+        dependency_order: Sort requirements so that dependents
+            precede dependencies
+        depth: Depth of recursive requirement discovery
+        include_pointers: If this not empty, *only* these TOML tables will
+            inspected (for pyproject.toml files)
+        exclude_pointers: If not empty, these TOML tables will *not* be
+            inspected (for pyproject.toml files)
     """
     print(
         "\n".join(
@@ -266,6 +283,8 @@ def freeze(
                 dependency_order=dependency_order,
                 reverse=reverse,
                 depth=depth,
+                include_pointers=include_pointers,
+                exclude_pointers=exclude_pointers,
             )
         )
     )
@@ -356,6 +375,26 @@ def main() -> None:
         type=int,
         help="Depth of recursive requirement discovery",
     )
+    parser.add_argument(
+        "--include-pointer",
+        default=[],
+        type=str,
+        action="append",
+        help=(
+            "One or more JSON pointers of elements to *include* "
+            "(applies to TOML files only)"
+        ),
+    )
+    parser.add_argument(
+        "--exclude-pointer",
+        default=[],
+        type=str,
+        action="append",
+        help=(
+            "One or more JSON pointers of elements to *exclude* "
+            "(applies to TOML files only)"
+        ),
+    )
     namespace: argparse.Namespace = parser.parse_args()
     freeze(
         requirements=namespace.requirement,
@@ -366,6 +405,8 @@ def main() -> None:
         no_version=namespace.no_version,
         dependency_order=namespace.dependency_order,
         depth=namespace.depth,
+        include_pointers=tuple(namespace.include_pointer),
+        exclude_pointers=tuple(namespace.exclude_pointer),
     )
 
 

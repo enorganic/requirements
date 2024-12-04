@@ -1,3 +1,0 @@
-daves-dev-tools
-mkdocs-material
-mkdocstrings[python]

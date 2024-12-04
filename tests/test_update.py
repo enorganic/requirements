@@ -10,7 +10,7 @@ from packaging.specifiers import Specifier
 from packaging.version import Version
 
 from dependence.update import (
-    get_updated_pyproject_toml,
+    _get_updated_pyproject_toml,
     get_updated_requirements_txt,
     get_updated_setup_cfg,
 )
@@ -118,7 +118,7 @@ def test_get_updated_pyproject_toml_a() -> None:
     with open(pyproject_toml_path) as pyproject_toml_io:
         pyproject_toml_data: str = pyproject_toml_io.read()
         # Update versions for all packages *except* pip
-        updated_pyproject_toml_data = get_updated_pyproject_toml(
+        updated_pyproject_toml_data = _get_updated_pyproject_toml(
             pyproject_toml_data,
             ignore=("pip", "setuptools"),
         )
@@ -145,7 +145,7 @@ def test_get_updated_pyproject_toml_b() -> None:
     with open(pyproject_toml_path) as pyproject_toml_io:
         pyproject_toml_data: str = pyproject_toml_io.read()
         # Update versions for all packages *except* pip
-        updated_pyproject_toml_data = get_updated_pyproject_toml(
+        updated_pyproject_toml_data = _get_updated_pyproject_toml(
             pyproject_toml_data,
             ignore=("pip", "setuptools"),
         )
@@ -163,22 +163,20 @@ def test_get_updated_pyproject_toml_b() -> None:
         + tomli.loads(updated_pyproject_toml_data)["project"]["dependencies"]
         + tomli.loads(updated_pyproject_toml_data)["project"][
             "optional-dependencies"
-        ]["twine"]
+        ]["jsonpointer"]
         + tomli.loads(updated_pyproject_toml_data)["project"][
             "optional-dependencies"
-        ]["wheel"]
+        ]["mypy"]
     )
 
 
 def test_get_updated_requirements_txt() -> None:
     """
-    Ensure that updating a setup.cfg file occurs without problems
+    Ensure that updating a setup.cfg file occurs without problems.
     """
     project: Path
     for project in (TEST_PROJECT_A, TEST_PROJECT_B):
-        requirements_txt_path: Path = project.joinpath(
-            "frozen_requirements.txt"
-        )
+        requirements_txt_path: Path = project.joinpath("requirements.txt")
         with open(requirements_txt_path) as requirements_txt_io:
             requirements_txt_data: str = requirements_txt_io.read()
             updated_requirements_txt_data: str = get_updated_requirements_txt(

@@ -1,4 +1,5 @@
 import functools
+import json
 import os
 import re
 import sys
@@ -11,42 +12,275 @@ from importlib.metadata import distribution as _get_distribution
 from importlib.metadata import distributions as _get_distributions
 from itertools import chain
 from pathlib import Path
-from runpy import run_path
 from shutil import rmtree
-from subprocess import CalledProcessError, list2cmdline
-from types import ModuleType
+from subprocess import DEVNULL, PIPE, CalledProcessError, list2cmdline, run
+from traceback import format_exception
 from typing import (
     IO,
     AbstractSet,
     Any,
+    Callable,
     Container,
     Dict,
+    Hashable,
     Iterable,
     List,
     MutableSet,
     Optional,
+    Set,
     Tuple,
+    TypedDict,
     Union,
     cast,
 )
 from warnings import warn
 
 import tomli
+from jsonpointer import resolve_pointer  # type: ignore
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 
-from ._utilities import (
-    append_exception_text,
-    check_output,
-    deprecated,
-    get_exception_text,
-    iter_distinct,
-)
-
 _BUILTIN_DISTRIBUTION_NAMES: Tuple[str] = ("distribute",)
-
-
 _UNSAFE_CHARACTERS_PATTERN: re.Pattern = re.compile("[^A-Za-z0-9.]+")
+
+
+def iter_distinct(items: Iterable[Hashable]) -> Iterable:
+    """
+    Yield distinct elements, preserving order
+    """
+    visited: Set[Hashable] = set()
+    item: Hashable
+    for item in items:
+        if item not in visited:
+            visited.add(item)
+            yield item
+
+
+def get_exception_text() -> str:
+    """
+    When called within an exception, this function returns a text
+    representation of the error matching what is found in
+    `traceback.print_exception`, but is returned as a string value rather than
+    printing.
+    """
+    return "".join(format_exception(*sys.exc_info()))
+
+
+def _iter_parse_delimited_value(value: str, delimiter: str) -> Iterable[str]:
+    return value.split(delimiter)
+
+
+def iter_parse_delimited_values(
+    values: Iterable[str], delimiter: str = ","
+) -> Iterable[str]:
+    """
+    This function iterates over input values which have been provided as a
+    list or iterable and/or a single string of character-delimited values.
+    A typical use-case is parsing multi-value command-line arguments.
+    """
+    if isinstance(values, str):
+        values = (values,)
+
+    def iter_parse_delimited_value_(value: str) -> Iterable[str]:
+        return _iter_parse_delimited_value(value, delimiter=delimiter)
+
+    return chain(*map(iter_parse_delimited_value_, values))
+
+
+def check_output(
+    args: Tuple[str, ...],
+    cwd: Union[str, Path] = "",
+    echo: bool = False,
+) -> str:
+    """
+    This function mimics `subprocess.check_output`, but redirects stderr
+    to DEVNULL, and ignores unicode decoding errors.
+
+    Parameters:
+
+    - command (Tuple[str, ...]): The command to run
+    """
+    if echo:
+        if cwd:
+            print("$", "cd", cwd, "&&", list2cmdline(args))
+        else:
+            print("$", list2cmdline(args))
+    output: str = run(
+        args,
+        stdout=PIPE,
+        stderr=DEVNULL,
+        check=True,
+        cwd=cwd or None,
+    ).stdout.decode("utf-8", errors="ignore")
+    if echo:
+        print(output)
+    return output
+
+
+def get_qualified_name(function: Callable[..., Any]) -> str:
+    name: str = getattr(function, "__name__", "")
+    if name:
+        module: str = getattr(function, "__module__", "")
+        if module not in (
+            "builtins",
+            "__builtin__",
+            "__main__",
+            "__init__",
+            "",
+        ):
+            name = f"{module}.{name}"
+    return name
+
+
+def deprecated(message: str = "") -> Callable[..., Callable[..., Any]]:
+    """
+    This decorator marks a function as deprecated, and issues a
+    deprecation warning when the function is called.
+    """
+
+    def decorating_function(
+        function: Callable[..., Any],
+    ) -> Callable[..., Any]:
+        @functools.wraps(function)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            name: str = get_qualified_name(function)
+            warn(
+                (
+                    (
+                        f"{name} is deprecated: {message}"
+                        if message
+                        else f"{name} is deprecated"
+                    )
+                    if name
+                    else message
+                ),
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            return function(*args, **kwargs)
+
+        return wrapper
+
+    return decorating_function
+
+
+def split_dot(path: str) -> Tuple[str, ...]:
+    return tuple(path.split("."))
+
+
+def tuple_starts_with(
+    a: Tuple[str, ...],
+    b: Tuple[str, ...],
+) -> bool:
+    """
+    Determine if tuple `a` starts with tuple `b`
+    """
+    return a[: len(b)] == b
+
+
+def tuple_starts_with_any(
+    a: Tuple[str, ...],
+    bs: Tuple[Tuple[str, ...], ...],
+) -> bool:
+    """
+    Determine if tuple `a` starts with any tuple in `bs`
+    """
+    b: Tuple[str, ...]
+    return any(tuple_starts_with(a, b) for b in bs)
+
+
+def iter_find_qualified_lists(
+    data: Union[Dict[str, Any], list],
+    item_condition: Callable[[Any], bool],
+    exclude_object_ids: AbstractSet[int] = frozenset(),
+) -> Iterable[list]:
+    """
+    Recursively yield all lists where all items in the list
+    satisfy the provided condition.
+
+    Parameters:
+        data: A dictionary or list to search
+        item_condition: A function that returns True if the list item
+            is the type we are looking for
+
+    >>> tuple(
+    ...     iter_find_qualified_lists(
+    ...         {
+    ...             "a": [
+    ...                 1,
+    ...                 2,
+    ...                 3,
+    ...             ],
+    ...             "b": [
+    ...                 "four",
+    ...                 "five",
+    ...                 "six",
+    ...             ],
+    ...             "c": [
+    ...                 7,
+    ...                 8,
+    ...                 9,
+    ...             ],
+    ...             "d": [
+    ...                 "ten",
+    ...                 "eleven",
+    ...                 "twelve",
+    ...             ],
+    ...             "e": {
+    ...                 "aa": [
+    ...                     13,
+    ...                     14,
+    ...                     15,
+    ...                 ],
+    ...                 "bb": [
+    ...                     "sixteen",
+    ...                     "seventeen",
+    ...                     "eighteen",
+    ...                 ],
+    ...             },
+    ...             "f": [
+    ...                 [
+    ...                     19,
+    ...                     20,
+    ...                     21,
+    ...                 ],
+    ...                 [
+    ...                     "twenty-two",
+    ...                     "twenty-three",
+    ...                     "twenty-four",
+    ...                 ],
+    ...             ],
+    ...         },
+    ...         lambda item: isinstance(
+    ...             item,
+    ...             int,
+    ...         ),
+    ...     )
+    ... )
+    ([1, 2, 3], [7, 8, 9], [13, 14, 15], [19, 20, 21])
+    """
+    if id(data) in exclude_object_ids:
+        return
+    if isinstance(data, dict):
+        _key: str
+        value: Any
+        for _key, value in data.items():
+            if isinstance(value, (list, dict)):
+                yield from iter_find_qualified_lists(
+                    value, item_condition, exclude_object_ids
+                )
+    elif isinstance(data, list) and data:
+        matched: bool = True
+        item: Any
+        for item in data:
+            if not item_condition(item):
+                matched = False
+            if isinstance(item, (list, dict)):
+                yield from iter_find_qualified_lists(
+                    item, item_condition, exclude_object_ids
+                )
+        if matched:
+            yield data
 
 
 def normalize_name(name: str) -> str:
@@ -61,9 +295,10 @@ class ConfigurationFileType(Enum):
     SETUP_CFG = auto()
     TOX_INI = auto()
     PYPROJECT_TOML = auto()
+    TOML = auto()
 
 
-@functools.lru_cache()
+@functools.lru_cache
 def get_configuration_file_type(path: str) -> ConfigurationFileType:
     if not os.path.isfile(path):
         raise FileNotFoundError(path)
@@ -76,6 +311,8 @@ def get_configuration_file_type(path: str) -> ConfigurationFileType:
         return ConfigurationFileType.PYPROJECT_TOML
     elif basename.endswith(".txt"):
         return ConfigurationFileType.REQUIREMENTS_TXT
+    elif basename.endswith(".toml"):
+        return ConfigurationFileType.TOML
     else:
         raise ValueError(
             f"{path} is not a recognized type of configuration file."
@@ -90,69 +327,33 @@ def is_configuration_file(path: str) -> bool:
     return True
 
 
-def _get_editable_finder_location(path_name: str) -> str:
-    key: str
-    value: Any
-    init_globals: Dict[str, Any]
-    try:
-        init_globals = run_path(path_name)
-    except Exception:
-        return ""
-    for key, value in init_globals.items():
-        if key.startswith("__editable__"):
-            finder: ModuleType = value
-            module_name: str
-            module_location: str
-            for module_name, module_location in getattr(
-                finder, "MAPPING", {}
-            ).items():
-                path: Path = Path(module_location)
-                index: int
-                for index in range(len(module_name.split("."))):
-                    path = path.parent
-                while path != path.parent:
-                    if (
-                        path.joinpath("setup.py").is_file()
-                        or path.joinpath("setup.cfg").is_file()
-                        or path.joinpath("pyproject.toml").is_file()
-                    ):
-                        return str(path)
-                    path = path.parent
-    return ""
-
-
-def _iter_path_editable_distribution_locations(
-    directory: str,
-) -> Iterable[Tuple[str, str]]:
-    directory_path: Path = Path(directory)
-    file_path: Path
-    for file_path in chain(
-        directory_path.glob("*.egg-link"),
-        directory_path.glob("__editable__.*.pth"),
-    ):
-        name: str
-        if file_path.name.endswith(".egg-link"):
-            name = file_path.name[:-9]
-        else:
-            name = file_path.name[13:-4].partition("-")[0]
-        name = normalize_name(name)
-        with open(file_path) as file_io:
-            location: str = file_io.read().strip().partition("\n")[0]
-            if os.path.exists(location):
-                yield name, location
-            else:
-                location = _get_editable_finder_location(str(file_path))
-                if location:
-                    yield name, location
+class _EditablePackageMetadata(TypedDict):
+    name: str
+    version: str
+    editable_project_location: str
 
 
 def _iter_editable_distribution_locations() -> Iterable[Tuple[str, str]]:
-    yield from chain(
-        *map(_iter_path_editable_distribution_locations, sys.path)
-    )
+    metadata: _EditablePackageMetadata
+    for metadata in json.loads(
+        check_output(
+            (
+                sys.executable,
+                "-m",
+                "pip",
+                "list",
+                "--editable",
+                "--format=json",
+            )
+        )
+    ):
+        yield (
+            normalize_name(metadata["name"]),
+            metadata["editable_project_location"],
+        )
 
 
-@functools.lru_cache()
+@functools.lru_cache
 def get_editable_distributions_locations() -> Dict[str, str]:
     """
     Get a mapping of (normalized) editable distribution names to their
@@ -182,7 +383,7 @@ def refresh_editable_distributions() -> None:
         _install_requirement_string(location, name=name, editable=True)
 
 
-@functools.lru_cache()
+@functools.lru_cache
 def get_installed_distributions() -> Dict[str, Distribution]:
     """
     Return a dictionary of installed distributions.
@@ -198,7 +399,7 @@ def get_distribution(name: str) -> Distribution:
     return get_installed_distributions()[normalize_name(name)]
 
 
-@functools.lru_cache()
+@functools.lru_cache
 def is_installed(distribution_name: str) -> bool:
     return normalize_name(distribution_name) in get_installed_distributions()
 
@@ -207,14 +408,14 @@ def get_requirement_distribution_name(requirement: Requirement) -> str:
     return normalize_name(requirement.name)
 
 
-@functools.lru_cache()
+@functools.lru_cache
 def get_requirement_string_distribution_name(requirement_string: str) -> str:
     return get_requirement_distribution_name(
         get_requirement(requirement_string)
     )
 
 
-@functools.lru_cache()
+@functools.lru_cache
 def is_requirement_string(requirement_string: str) -> bool:
     try:
         Requirement(requirement_string)
@@ -306,132 +507,140 @@ def _iter_tox_ini_requirement_strings(
     )
 
 
-def _iter_pyproject_toml_requirement_strings(
+def _is_installed_requirement_string(item: Any) -> bool:
+    """
+    Determine if an item is a valid requirement string for an installed
+    package.
+
+    Parameters:
+        item: An item to evaluate.
+    """
+    if not isinstance(item, str):
+        return False
+    try:
+        requirement: Requirement = Requirement(item)
+    except InvalidRequirement:
+        return False
+    return is_installed(requirement.name)
+
+
+def iter_find_requirements_lists(
+    document: Union[Dict[str, Any], list],
+    include_pointers: Tuple[str, ...] = (),
+    exclude_pointers: Tuple[str, ...] = (),
+) -> Iterable[List[str]]:
+    """
+    Recursively yield all lists of valid requirement strings for installed
+    packages. Exclusions are resolved before inclusions.
+
+    Parameters:
+        document: A dictionary or list of JSON-compatible data elements.
+        include_pointers: JSON pointers of elements to include.
+        exclude_pointers: JSON pointers of elements to exclude.
+    """
+    exclude_object_ids: AbstractSet[int]
+    if exclude_pointers:
+        exclude_object_ids = set(
+            map(
+                id,
+                filter(
+                    None,
+                    map(
+                        functools.partial(
+                            resolve_pointer, document, default=None
+                        ),
+                        exclude_pointers,
+                    ),
+                ),
+            )
+        )
+    else:
+        exclude_object_ids = frozenset()
+    if include_pointers:
+        included_element: Any
+        for included_element in filter(
+            None,
+            map(
+                functools.partial(resolve_pointer, document, default=None),
+                include_pointers,
+            ),
+        ):
+            if isinstance(included_element, (list, dict)):
+                yield from iter_find_qualified_lists(
+                    included_element,
+                    item_condition=_is_installed_requirement_string,
+                    exclude_object_ids=exclude_object_ids,
+                )
+    else:
+        yield from iter_find_qualified_lists(
+            document,
+            item_condition=_is_installed_requirement_string,
+            exclude_object_ids=exclude_object_ids,
+        )
+
+
+def _iter_toml_requirement_strings(
     path: str,
-    exclude_build_system: bool = False,
-    exclude_project: bool = False,
-    exclude_project_dependencies: bool = False,
-    exclude_project_optional_dependencies: bool = False,
-    include_project_optional_dependencies: Iterable[str] = frozenset(),
-    exclude_tools: bool = False,
-    exclude_tox: bool = False,
+    include_pointers: Tuple[str, ...] = (),
+    exclude_pointers: Tuple[str, ...] = (),
 ) -> Iterable[str]:
     """
-    Read a pyproject.toml file and yield the requirements found.
+    Read a TOML file and yield the requirements found.
 
-    - exclude_build_system (bool) = False: If `True`, build-system
-      requirements will not be included
-    - exclude_project (bool) = False: If `True`, build-system
-      requirements will not be included
-    - exclude_project_dependencies (bool) = False: If `True`, project
-      dependencies will not be included
-    - exclude_project_optional_dependencies (bool) = False: If `True`, project
-      optional dependencies will not be included
-    - include_project_optional_dependencies ({str}) = frozenset(): If a
-      non-empty set is provided, *only* dependencies for the specified extras
-      (options) will be included
-    - exclude_tools (bool) = False: If `True`, tool requirements will not be
-      included
-    - exclude_tox (bool) = False: If `True`, tool.tox dependencies will not be
-      included
+    Parameters:
+        Path: The path to a TOML file.
+        include_pointers: A tuple of JSON pointers indicating elements to
+            include (defaults to all elements).
+        exclude_pointers: A tuple of JSON pointers indicating elements to
+            exclude (defaults to no exclusions).
     """
-    include_project_optional_dependencies = (
-        include_project_optional_dependencies
-        if isinstance(include_project_optional_dependencies, set)
-        else frozenset(include_project_optional_dependencies)
+    # Parse pyproject.toml
+    try:
+        with open(path, "rb") as pyproject_io:
+            document: Dict[str, Any] = tomli.load(pyproject_io)
+    except FileNotFoundError:
+        return
+    # Find requirements
+    yield from iter_distinct(
+        chain(
+            *iter_find_requirements_lists(
+                document,
+                include_pointers=include_pointers,
+                exclude_pointers=exclude_pointers,
+            )
+        )
     )
-    pyproject_io: IO[str]
-    with open(path) as pyproject_io:
-        pyproject: Dict[str, Any] = tomli.loads(pyproject_io.read())
-        # Build system requirements
-        if (
-            ("build-system" in pyproject)
-            and ("requires" in pyproject["build-system"])
-            and not exclude_build_system
-        ):
-            yield from pyproject["build-system"]["requires"]
-        # Project requirements
-        if ("project" in pyproject) and not exclude_project:
-            if (
-                "dependencies" in pyproject["project"]
-            ) and not exclude_project_dependencies:
-                yield from pyproject["project"]["dependencies"]
-            if (
-                "optional-dependencies" in pyproject["project"]
-            ) and not exclude_project_optional_dependencies:
-                key: str
-                values: Iterable[str]
-                for key, values in pyproject["project"][
-                    "optional-dependencies"
-                ].items():
-                    if (not include_project_optional_dependencies) or (
-                        key in include_project_optional_dependencies
-                    ):
-                        yield from values
-        # Tool Requirements
-        if ("tool" in pyproject) and not exclude_tools:
-            # Tox
-            if ("tox" in pyproject["tool"]) and not exclude_tox:
-                if "legacy_tox_ini" in pyproject["tool"]["tox"]:
-                    yield from _iter_tox_ini_requirement_strings(
-                        string=pyproject["tool"]["tox"]["legacy_tox_ini"]
-                    )
 
 
 def iter_configuration_file_requirement_strings(
     path: str,
-    exclude_build_system: bool = False,
-    exclude_project: bool = False,
-    exclude_project_dependencies: bool = False,
-    exclude_project_optional_dependencies: bool = False,
-    include_project_optional_dependencies: AbstractSet[str] = frozenset(),
-    exclude_tools: bool = False,
-    exclude_tox: bool = False,
+    *,
+    include_pointers: Tuple[str, ...] = (),
+    exclude_pointers: Tuple[str, ...] = (),
 ) -> Iterable[str]:
     """
     Read a configuration file and yield the parsed requirements.
 
     Parameters:
-
-    - path (str): The path to a configuration file
-
-    Parameters only applicable to `pyproject.toml` files:
-
-    - exclude_build_system (bool) = False: If `True`, build-system
-      requirements will not be included
-    - exclude_project (bool) = False: If `True`, build-system
-      requirements will not be included
-    - exclude_project_dependencies (bool) = False: If `True`, project
-      dependencies will not be included
-    - exclude_project_optional_dependencies (bool) = False: If `True`, project
-      optional dependencies will not be included
-    - include_project_optional_dependencies ({str}) = frozenset(): If a
-      non-empty set is provided, *only* dependencies for the specified extras
-      (options) will be included
-    - exclude_tools (bool) = False: If `True`, tool requirements will not be
-      included
-    - exclude_tox (bool) = False: If `True`, tool.tox dependencies will not be
-      included
+        path: The path to a configuration file
+        include_pointers: A tuple of JSON pointers indicating elements to
+            include (defaults to all elements).
+        exclude_pointers: A tuple of JSON pointers indicating elements to
+            exclude (defaults to no exclusions).
     """
     configuration_file_type: ConfigurationFileType = (
         get_configuration_file_type(path)
     )
     if configuration_file_type == ConfigurationFileType.SETUP_CFG:
         return _iter_setup_cfg_requirement_strings(path)
-    elif configuration_file_type == ConfigurationFileType.PYPROJECT_TOML:
-        return _iter_pyproject_toml_requirement_strings(
+    elif configuration_file_type in (
+        ConfigurationFileType.PYPROJECT_TOML,
+        ConfigurationFileType.TOML,
+    ):
+        return _iter_toml_requirement_strings(
             path,
-            exclude_build_system=exclude_build_system,
-            exclude_project=exclude_project,
-            exclude_project_dependencies=exclude_project_dependencies,
-            exclude_project_optional_dependencies=(
-                exclude_project_optional_dependencies
-            ),
-            include_project_optional_dependencies=(
-                include_project_optional_dependencies
-            ),
-            exclude_tools=exclude_tools,
-            exclude_tox=exclude_tox,
+            include_pointers=include_pointers,
+            exclude_pointers=exclude_pointers,
         )
     elif configuration_file_type == ConfigurationFileType.TOX_INI:
         return _iter_tox_ini_requirement_strings(path=path)
@@ -442,7 +651,7 @@ def iter_configuration_file_requirement_strings(
         return _iter_file_requirement_strings(path)
 
 
-@functools.lru_cache()
+@functools.lru_cache
 def is_editable(name: str) -> bool:
     """
     Return `True` if the indicated distribution is an editable installation.
@@ -461,7 +670,10 @@ def _get_setup_cfg_metadata(path: str, key: str) -> str:
         if "metadata" in parser:
             return parser.get("metadata", key, fallback="")
         else:
-            warn(f"No `metadata` section found in: {path}")
+            warn(
+                f"No `metadata` section found in: {path}",
+                stacklevel=2,
+            )
     return ""
 
 
@@ -494,7 +706,8 @@ def _get_setup_py_metadata(path: str, args: Tuple[str, ...]) -> str:
                 warn(
                     f"A package name could not be found in {path}, "
                     "attempting to refresh egg info"
-                    f"\nError ignored: {get_exception_text()}"
+                    f"\nError ignored: {get_exception_text()}",
+                    stacklevel=2,
                 )
                 # re-write egg info and attempt to get the name again
                 setup_egg_info(directory)
@@ -503,7 +716,8 @@ def _get_setup_py_metadata(path: str, args: Tuple[str, ...]) -> str:
                 except Exception:
                     warn(
                         f"A package name could not be found in {path}"
-                        f"\nError ignored: {get_exception_text()}"
+                        f"\nError ignored: {get_exception_text()}",
+                        stacklevel=2,
                     )
     finally:
         os.chdir(current_directory)
@@ -550,7 +764,7 @@ def _setup(arguments: Tuple[str, ...]) -> None:
     try:
         check_output((sys.executable, "setup.py") + arguments)
     except CalledProcessError:
-        warn(f"Ignoring error: {get_exception_text()}")
+        warn(f"Ignoring error: {get_exception_text()}", stacklevel=2)
 
 
 def _setup_location(
@@ -571,50 +785,8 @@ def _setup_location(
         os.chdir(current_directory)
 
 
-@deprecated()
-def setup_dist_egg_info(directory: str) -> None:
-    """
-    Refresh dist-info and egg-info for the editable package installed in
-    `directory`
-    """
-    directory = os.path.abspath(directory)
-    if not os.path.isdir(directory):
-        directory = os.path.dirname(directory)
-    _setup_location(
-        directory,
-        (
-            ("-q", "dist_info"),
-            ("-q", "egg_info"),
-        ),
-    )
-
-
 def get_editable_distribution_location(name: str) -> str:
     return get_editable_distributions_locations().get(normalize_name(name), "")
-
-
-@deprecated()
-def setup_dist_info(
-    directory: Union[str, Path], output_dir: Union[str, Path] = ""
-) -> None:
-    """
-    Refresh dist-info for the editable package installed in
-    `directory`
-    """
-    if isinstance(directory, str):
-        directory = Path(directory)
-    directory = directory.absolute()
-    if not directory.is_dir():
-        directory = directory.parent
-    if isinstance(output_dir, str) and output_dir:
-        output_dir = Path(output_dir)
-    _setup_location(
-        directory,
-        (
-            ("-q", "dist_info")
-            + (("--output-dir", str(output_dir)) if output_dir else ()),
-        ),
-    )
 
 
 def setup_egg_info(directory: Union[str, Path], egg_base: str = "") -> None:
@@ -688,7 +860,7 @@ def get_required_distribution_names(
       requirements. If `None` (the default), recursion is not restricted.
     """
     if isinstance(exclude, str):
-        exclude = set((normalize_name(exclude),))
+        exclude = {normalize_name(exclude)}
     else:
         exclude = set(map(normalize_name, exclude))
     return set(
@@ -740,18 +912,12 @@ def _install_requirement_string(
         "install",
         "--no-deps",
         "--no-compile",
-        "--no-build-isolation",
     )
     if editable:
         command += (
             "-e",
             requirement_string,
         )
-        if sys.version_info < (3, 9):
-            command += (
-                "--config-settings",
-                "editable_mode=compat",
-            )
     else:
         command += (requirement_string,)
     try:
@@ -759,12 +925,15 @@ def _install_requirement_string(
     except CalledProcessError as error:
         message: str = (
             (
-                f"\n{list2cmdline(command)}" f"\nCould not install {name}"
+                f"\nCould not install {name}:"
+                f"\n$ {list2cmdline(command)}"
+                f"\n{error.output.decode()}"
                 if name == requirement_string
                 else (
-                    f"\n{list2cmdline(command)}"
                     f"\nCould not install {name} from "
-                    f"{requirement_string}"
+                    f"{requirement_string}:"
+                    f"\n$ {list2cmdline(command)}"
+                    f"\n{error.output.decode()}"
                 )
             )
             if name
@@ -774,18 +943,12 @@ def _install_requirement_string(
             )
         )
         if not editable:
-            append_exception_text(
-                error,
-                message,
-            )
+            print(message)
             raise error
         try:
             check_output(command + ("--force-reinstall",))
         except CalledProcessError as retry_error:
-            append_exception_text(
-                retry_error,
-                message,
-            )
+            print(message)
             raise retry_error
 
 
@@ -837,7 +1000,8 @@ def _get_requirement_distribution(
         if echo:
             warn(
                 f'The required distribution "{name}" was not installed, '
-                "attempting to install it now..."
+                "attempting to install it now...",
+                stacklevel=2,
             )
         # Attempt to install the requirement...
         install_requirement(requirement, echo=echo)
@@ -906,8 +1070,7 @@ def _iter_requirement_names(
                     MutableSet[str],
                     exclude
                     | (
-                        lateral_exclude
-                        - set((_get_requirement_name(requirement_),))
+                        lateral_exclude - {_get_requirement_name(requirement_)}
                     ),
                 ),
                 recursive=recursive,
@@ -929,106 +1092,11 @@ def _iter_requirement_names(
         requirement_: Requirement
         requirement_names = chain(
             requirement_names,
-            *map(
-                lambda requirement_: iter_requirement_names_(
+            *(
+                iter_requirement_names_(
                     requirement_, None if (depth is None) else depth - 1
-                ),
-                requirements,
+                )
+                for requirement_ in requirements
             ),
         )
     return requirement_names
-
-
-@deprecated()
-def _iter_requirement_strings_required_distribution_names(
-    requirement_strings: Iterable[str],
-    echo: bool = False,
-) -> Iterable[str]:
-    visited_requirement_strings: MutableSet[str] = set()
-    if isinstance(requirement_strings, str):
-        requirement_strings = (requirement_strings,)
-
-    def get_required_distribution_names_(
-        requirement_string: str,
-    ) -> MutableSet[str]:
-        if requirement_string not in visited_requirement_strings:
-            try:
-                name: str = get_requirement_string_distribution_name(
-                    requirement_string
-                )
-                visited_requirement_strings.add(requirement_string)
-                return cast(
-                    MutableSet[str],
-                    set((name,))
-                    | get_required_distribution_names(
-                        requirement_string, echo=echo
-                    ),
-                )
-            except KeyError:
-                pass
-        return set()
-
-    return iter_distinct(
-        chain(*map(get_required_distribution_names_, requirement_strings)),
-    )
-
-
-@deprecated()
-def get_requirements_required_distribution_names(
-    requirements: Iterable[str] = (),
-    echo: bool = False,
-) -> MutableSet[str]:
-    """
-    Get the distributions required by one or more specified distributions or
-    configuration files.
-
-    Parameters:
-
-    - requirements ([str]): One or more requirement specifiers (for example:
-      "requirement-name[extra-a,extra-b]" or ".[extra-a, extra-b]) and/or paths
-      to a setup.cfg, pyproject.toml, tox.ini or requirements.txt file
-    """
-    # Separate requirement strings from requirement files
-    if isinstance(requirements, str):
-        requirements = set((requirements,))
-    else:
-        requirements = set(requirements)
-    requirement_files: MutableSet[str] = set(
-        filter(is_configuration_file, requirements)
-    )
-    requirement_strings: MutableSet[str] = cast(
-        MutableSet[str], requirements - requirement_files
-    )
-    name: str
-    return set(
-        _iter_requirement_strings_required_distribution_names(
-            iter_distinct(
-                chain(
-                    requirement_strings,
-                    *map(
-                        iter_configuration_file_requirement_strings,
-                        requirement_files,
-                    ),
-                )
-            ),
-            echo=echo,
-        )
-    )
-
-
-@deprecated()
-def iter_distribution_location_file_paths(location: str) -> Iterable[str]:
-    location = os.path.abspath(location)
-    name: str = get_setup_distribution_name(location)
-    setup_egg_info(location)
-    metadata_path: str = os.path.join(
-        location, f"{name.replace('-', '_')}.egg-info"
-    )
-    distribution: Distribution = Distribution.at(metadata_path)
-    if not distribution.files:
-        raise RuntimeError(f"No metadata found at {metadata_path}")
-    path: str
-    return map(
-        lambda path: os.path.abspath(os.path.join(location, path)),
-        distribution.files,
-    )

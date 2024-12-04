@@ -1,79 +1,106 @@
 SHELL := bash
-PYTHON_VERSION := 3.8
+# This is the version of python used for linting
+LINT_PYTHON_VERSION := 3.8
 .PHONY: docs
 
+# Create all environments
 install:
-	{ python$(PYTHON_VERSION) -m venv venv || py -$(PYTHON_VERSION) -m venv venv ; } && \
-	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	python3 -m pip install --upgrade pip && \
-	pip install -r frozen_requirements.txt -e . && \
-	{ mypy --install-types --non-interactive || echo "" ; } && \
+	{ hatch --version || pipx install --upgrade hatch || python3 -m pip install --upgrade hatch ; } && \
+	hatch run pip install --upgrade pip && \
+	hatch run docs:pip install --upgrade pip && \
+	hatch run docs:pip install --upgrade pip && \
+	hatch run test:pip install --upgrade pip && \
+	{ hatch run mypy --install-types --non-interactive || echo "" ; } && \
 	echo "Installation complete"
 
-ci-install:
-	{ python3 -m venv venv || py -3 -m venv venv ; } && \
-	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	python3 -m pip install --upgrade pip && \
-	pip install -r frozen_requirements.txt -e . && \
-	echo "Installation complete"
-
+# Re-create all environments, from scratch (no reference to pinned
+# requirements)
 reinstall:
-	{ rm -R venv || echo "" ; } && \
-	{ python$(PYTHON_VERSION) -m venv venv || py -$(PYTHON_VERSION) -m venv venv ; } && \
-	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	python3 -m pip install --upgrade pip && \
-	pip install -r dev_requirements.txt -r test_requirements.txt -e . && \
-	{ mypy --install-types --non-interactive || echo "" ; } && \
-	make requirements && \
-	echo "Installation complete"
-
-clean:
-	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	daves-dev-tools uninstall-all\
-	 -e .\
-     -e pyproject.toml\
-     -e tox.ini\
-     -e frozen_requirements.txt && \
-	daves-dev-tools clean
-
-distribute:
-	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	daves-dev-tools distribute --skip-existing
-
-upgrade:
-	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	dependence freeze\
-	 -nv '*' . pyproject.toml tox.ini dev_requirements.txt \
-	 > .frozen_requirements.txt && \
-	pip install --upgrade --upgrade-strategy eager\
-	 -r .frozen_requirements.txt && \
-	rm .frozen_requirements.txt && \
+	{ hatch --version || pipx install --upgrade hatch || python3 -m pip install --upgrade hatch ; } && \
+	echo "" > default_requirements.txt && \
+	echo "" > docs_requirements.txt && \
+	echo "" > test_requirements.txt && \
+	hatch env prune && \
+	make && \
 	make requirements
 
+distribute:
+	hatch build && hatch publish && rm -rf dist
+
+# This will upgrade all requirements, and refresh pinned requirements to
+# match
+upgrade:
+	echo "" > default_requirements.txt && \
+	echo "" > docs_requirements.txt && \
+	echo "" > test_requirements.txt && \
+	hatch run dependence freeze\
+	 --include-pointer /tool/hatch/envs/default\
+	 --include-pointer /project\
+	 pyproject.toml > .requirements.txt && \
+	hatch run pip install --upgrade --upgrade-strategy eager\
+	 -r .requirements.txt && \
+	rm .requirements.txt && \
+	hatch run docs:dependence freeze\
+	 --include-pointer /tool/hatch/envs/docs\
+	 --include-pointer /project\
+	 pyproject.toml > .requirements.txt && \
+	hatch run docs:pip install --upgrade --upgrade-strategy eager\
+	 -r .requirements.txt && \
+	hatch run test:dependence freeze\
+	 --include-pointer /tool/hatch/envs/test\
+	 --include-pointer /project\
+	 pyproject.toml > .requirements.txt && \
+	hatch run test:pip install --upgrade --upgrade-strategy eager\
+	 -r .requirements.txt && \
+	rm .requirements.txt && \
+	make requirements
+
+# This will update pinned requirements to align with the
+# package versions installed in each environment, and will align the project
+# dependency versions with those installed in the default environment
 requirements:
-	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	dependence update\
-	 setup.cfg pyproject.toml tox.ini && \
-	dependence freeze\
-	 -e pip\
-	 -e wheel\
-	 . pyproject.toml tox.ini dev_requirements.txt\
-	 > frozen_requirements.txt && \
-	dependence freeze -nv '*' -d 0 tox.ini > test_requirements.txt
+	hatch run dependence update\
+	 --include-pointer /tool/hatch/envs/default\
+	 --include-pointer /project\
+	 pyproject.toml && \
+	hatch run docs:dependence update pyproject.toml --include-pointer /tool/hatch/envs/docs && \
+	hatch run test:dependence update pyproject.toml --include-pointer /tool/hatch/envs/test && \
+	hatch run dependence freeze\
+	 -e pip \
+	 -e wheel \
+	 --include-pointer /tool/hatch/envs/default \
+	 . \
+	 pyproject.toml \
+	 > default_requirements.txt && \
+	hatch run docs:dependence freeze\
+	 -e pip \
+	 -e wheel \
+	 --include-pointer /tool/hatch/envs/docs \
+	 . \
+	 pyproject.toml \
+	 > docs_requirements.txt && \
+	hatch run test:dependence freeze\
+	 -e pip \
+	 -e wheel \
+	 --include-pointer /tool/hatch/envs/test \
+	 . \
+	 pyproject.toml \
+	 > test_requirements.txt
 
 # Run all tests
 test:
-	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	if [[ "$$(python -V)" = "Python $(PYTHON_VERSION)."* ]] ;\
-	then tox -r -p -o ;\
-	else tox -r -e pytest ;\
+	if [[ "$$(python -V)" = "Python $(LINT_PYTHON_VERSION)."* ]] ;\
+	then hatch run lint && hatch run test:test ;\
+	else hatch run test:test ;\
 	fi
 
 format:
-	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	isort . && black . && flake8 && mypy
+	hatch run ruff check --select I --fix . && \
+	hatch run ruff format . && \
+	hatch run ruff check . && \
+	hatch run mypy && \
+	echo "Format Successful!"
 
 docs:
-	{ . venv/bin/activate || venv/Scripts/activate.bat ; } && \
-	mkdocs build && \
-	mkdocs serve
+	hatch run docs:mkdocs build && \
+	hatch run docs:mkdocs serve

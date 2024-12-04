@@ -3,15 +3,12 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-    - dependence/**
-    - pyproject.toml
-    - setup.py
-    - setup.cfg
+    - src/**
     - pyproject.toml
     - tests/**
-    - frozen_requirements.txt
+    - requirements.txt
     - tox.ini
-    - .github/**
+    - .github/workflows/test.yml
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -27,6 +24,7 @@ jobs:
         - '3.10'
         - 3.11
         - 3.12
+        - 3.13
     steps:
     - uses: actions/checkout@v4
     - name: Setup Python

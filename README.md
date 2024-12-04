@@ -3,9 +3,11 @@
 [![test](https://github.com/enorganic/dependence/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/enorganic/dependence/actions/workflows/test.yml)
 [![PyPI version](https://badge.fury.io/py/dependence.svg?icon=si%3Apython)](https://badge.fury.io/py/dependence)
 
-This project provides a Command Line Interface and library for inspecting
-and updating requirement versions for dependencies in setup.cfg,
-pyproject.toml, requirements.txt, and tox.ini files.
+Dependence provides a Command Line Interface and library for aligning
+a python projects' declared dependencies with the package versions
+installed in the environment in which `dependence` is executed, and for
+"freezing" recursively resolved package dependencies (like `pip freeze`, but
+for a package, instead of the entire environment).
 
 - [Documentation](https://enorganic.github.io/dependence/)
 - [Contributing](https://enorganic.github.io/dependence/contributing)
@@ -18,106 +20,143 @@ You can install `dependence` with pip:
 pip3 install dependence
 ```
 
-## Usage
+## Example Usage
 
-### Command Line Interface
+### Listing Dependencies
 
-```console
-$ dependence -h
-Usage:
-  dependence <command> [options]
+The `dependence freeze` command, and the `dependence.freeze.freeze` function,
+print all requirements for one or more specified python project,
+requirements.txt, pyproject.toml, setup.cfg, or tox.ini files. The output
+format matches that of `pip freeze`, but only lists dependencies of indicated
+packages and/or editable project locations.
 
-Commands:
-  update                      Update requirement versions in the specified
-                              files to align with currently installed versions
-                              of each distribution
-  freeze                      Print dependencies inferred from an installed
-                              distribution or project, in a similar format
-                              to the output of `pip freeze`.
-```
+You may refer to the [`dependence freeze` CLI reference](https://dependence.enorganic.org/cli.md#dependence-freeze)
+and/or [`dependence.freeze` API reference](https://dependence.enorganic.org/api/freeze.md) for details
+concerning this command/module, related options, and more complex use case
+examples.
 
-#### dependence update
-
-This command will update version specifiers for
-all package requirements in your setup.cfg, pyproject.toml, tox.ini,
-or requirements.txt files to match currently installed versions of each
-distribution (matching the existing granularity, and only for *inclusive*
-specifiers—so where the comparator is "~=", "==", ">=", or "<=", but not where
-the comparator is ">", "<", or "!=").
+We'll use this project, `dependence`, as a simple example. To start with, let's
+see what the currently installed dependencies for this package look like
+at the time of writing:
 
 ```console
-$ dependence update -h
-usage: dependence update [-h] [-i IGNORE] [-aen ALL_EXTRA_NAME]
-                           path [path ...]
-
-Update requirement versions in the specified files to align with currently
-installed versions of each distribution.
-
-positional arguments:
-  path                  One or more local paths to a setup.cfg,
-                        setup.cfg, and/or requirements.txt file
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -i IGNORE, --ignore IGNORE
-                        A comma-separated list of distributions to ignore
-                        (leave any requirements pertaining to the package
-                        as-is)
-  -aen ALL_EXTRA_NAME, --all-extra-name ALL_EXTRA_NAME
-                        If provided, an extra which consolidates the
-                        requirements for all other extras will be
-                        added/updated to setup.cfg or setup.cfg
-                        (this argument is ignored for requirements.txt
-                        files)
+$ dependence freeze .
+packaging==24.1
+pip==24.3.0
+setuptools==75.1.0
+tomli==2.1.0
+tomli_w==1.0.0
 ```
 
-Example:
+...now let's save this output for later comparison purposes:
 
 ```bash
-dependence update -aen all setup.cfg pyproject.toml tox.ini
+dependence freeze . > requirements_before.txt
 ```
 
-#### dependence freeze
+Now, we'll upgrade our dependencies and see what they look like after:
 
 ```console
-$ dependence freeze -h
-usage: dependence freeze [-h] [-e EXCLUDE] [-er EXCLUDE_RECURSIVE] [-nv NO_VERSION]
-                         [-do] [--reverse] [-d DEPTH]
-                         requirement [requirement ...]
-
-This command prints dependencies inferred from an installed distribution or project, in
-a similar format to the output of `pip freeze`, except that all generated requirements
-are specified in the format "distribution-name==0.0.0" (including for editable
-installations). Using this command instead of `pip freeze` to generate requirement
-files ensures that you don't bloat your requirements files with superfluous
-distributions.
-
-positional arguments:
-  requirement           One or more requirement specifiers (for example: "requirement-
-                        name", "requirement-name[extra-a,extra-b]", ".[extra-a,
-                        extra-b]" or "../other-editable-package-directory[extra-a,
-                        extra-b]) and/or paths to a setup.py, setup.cfg,
-                        pyproject.toml, tox.ini or requirements.txt file
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -e EXCLUDE, --exclude EXCLUDE
-                        A distribution (or comma-separated list of distributions) to
-                        exclude from the output
-  -er EXCLUDE_RECURSIVE, --exclude-recursive EXCLUDE_RECURSIVE
-                        A distribution (or comma-separated list of distributions) to
-                        exclude from the output. Unlike -e / --exclude, this argument
-                        also precludes recursive requirement discovery for the
-                        specified packages, thereby excluding all of the excluded
-                        package's requirements which are not required by another (non-
-                        excluded) distribution.
-  -nv NO_VERSION, --no-version NO_VERSION
-                        Don't include versions (only output distribution names) for
-                        packages matching this/these glob pattern(s) (note: the value
-                        must be single-quoted if it contains wildcards)
-  -do, --dependency-order
-                        Sort requirements so that dependents precede dependencies
-  --reverse             Print requirements in reverse order
-  -d DEPTH, --depth DEPTH
-                        Depth of recursive requirement discovery
+$ pip install -q --upgrade --upgrade-strategy eager . && dependence freeze .
+packaging==24.2
+pip==24.3.1
+setuptools==75.3.0
+tomli==2.2.1
+tomli_w==1.0.0
 ```
+
+...next let's dump them to a file and compare them with our previous
+dependencies:
+
+```console
+$ dependence freeze . > dependence_after.txt
+$ diff dependence_before.txt dependence_after.txt
+1,5c1,5
+< packaging==24.1
+< pip==24.3.0
+< setuptools==75.1.0
+< tomli==2.1.0
+< tomli_w==1.0.0
+---
+> packaging==24.2
+> pip==24.3.1
+> setuptools==75.3.0
+> tomli==2.2.1
+> tomli_w==1.0.1
+```
+
+As you can see above, *all* of our dependencies have been upgraded.
+
+### Updating Requirement Specifiers
+
+To start with, let's take a look at our pyproject.toml file:
+
+```toml
+[project]
+name = "dependence"
+version = "1.0.0"
+dependencies = [
+    "packaging>23",
+    "pip",
+    "setuptools>63",
+    "tomli-w~=1.0",
+    "tomli~=2.1",
+]
+```
+
+Now that we've upgraded our dependencies, we want to update our
+pyproject.toml file to align with our upgraded dependencies. This is desirable
+to ensure that `dependence` isn't installed alongside a version of one of its
+dependencies preceding functionality utilized by `dependence`.
+
+```bash
+dependence update pyproject.toml
+```
+
+Afterwards, our pyproject.toml file looks like this:
+
+```toml
+[project]
+name = "dependence"
+version = "1.0.0"
+dependencies = [
+    "packaging>23",
+    "pip",
+    "setuptools>63",
+    "tomli-w~=1.0",
+    "tomli~=2.2",
+]
+```
+
+Here's the diff:
+
+```console
+$ diff pyproject_before.toml pyproject_after.toml
+9c9
+<     "tomli~=2.1",
+---
+>     "tomli~=2.2",
+```
+
+As you can see, only the version specifier for tomli changed. We know that
+every dependency was upgraded, wo why was only the `tomli` version specifier
+updated? By design. Here are the rules `dependence update` adheres to:
+
+-   We only update requirements versions when they have *inclusive* specifiers.
+    For example, `~=`, `>=`, and `<=` are inclusive, whereas `!=`, `>`, and
+    `<` are *exclusive*. For this reason, nothing changed for
+    "packaging" and "setuptools" in our above example.
+-   We always retain the existing level of specificity. If your version
+    specifier is `~=1.2`, and the new version is `1.5.6`, we're going to
+    update your specifier to `~=1.5`. If your requirement has a minor version
+    level of specificity, and only a patch version upgrade is performed,
+    nothing will change in your project dependency specifier. This is why
+    you do not see any change in our above pyproject.toml file for the
+    `tomli-w` dependency—both new and old share the same minor version.
+-   If your requirement is unversioned, we don't touch it, of course. This is
+    why you didn't see any change for "pip".
+
+You may refer to the [`dependence update` CLI reference](https://dependence.enorganic.org/cli.md#dependence-update)
+and/or [`dependence.update` API reference](https://dependence.enorganic.org/api/update.md) for details
+concerning this command/module, related options, and more complex use
+cases/examples.

@@ -1,11 +1,13 @@
 from pathlib import Path
 from typing import AbstractSet, List, MutableSet, Tuple
 
-from dependence.freeze import get_frozen_requirements
-from dependence.utilities import (
+import pytest
+
+from dependence._utilities import (
     get_required_distribution_names,
     get_requirement_string_distribution_name,
 )
+from dependence.freeze import get_frozen_requirements
 
 TEST_PROJECT_A: Path = (
     Path(__file__).absolute().parent.joinpath("test_projects/test_project_a/")
@@ -14,7 +16,7 @@ TEST_PROJECT_B: Path = (
     Path(__file__).absolute().parent.joinpath("test_projects/test_project_b/")
 )
 REQUIREMENTS_A: Tuple[str, ...] = (
-    str(TEST_PROJECT_A.joinpath("frozen_requirements.txt")),
+    str(TEST_PROJECT_A.joinpath("requirements.txt")),
     str(TEST_PROJECT_A.joinpath("setup.cfg")),
     str(TEST_PROJECT_A.joinpath("pyproject.toml")),
 )
@@ -62,3 +64,7 @@ def test_freeze_order() -> None:
 
 def test_freeze_cli() -> None:
     pass
+
+
+if __name__ == "__main__":
+    pytest.main(["-vv", __file__])
