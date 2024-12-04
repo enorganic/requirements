@@ -7,7 +7,6 @@ on:
     - pyproject.toml
     - tests/**
     - "*_requirements.txt"
-    - tox.ini
     - .github/workflows/test.yml
 jobs:
   test:
