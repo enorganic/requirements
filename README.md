@@ -30,8 +30,8 @@ requirements.txt, pyproject.toml, setup.cfg, or tox.ini files. The output
 format matches that of `pip freeze`, but only lists dependencies of indicated
 packages and/or editable project locations.
 
-You may refer to the [`dependence freeze` CLI reference](https://dependence.enorganic.org/cli.md#dependence-freeze)
-and/or [`dependence.freeze` API reference](https://dependence.enorganic.org/api/freeze.md) for details
+You may refer to the [`dependence freeze` CLI reference](https://dependence.enorganic.org/cli/#dependence-freeze)
+and/or [`dependence.freeze` API reference](https://dependence.enorganic.org/api/freeze/) for details
 concerning this command/module, related options, and more complex use case
 examples.
 
@@ -156,7 +156,7 @@ updated? By design. Here are the rules `dependence update` adheres to:
 -   If your requirement is unversioned, we don't touch it, of course. This is
     why you didn't see any change for "pip".
 
-You may refer to the [`dependence update` CLI reference](https://dependence.enorganic.org/cli.md#dependence-update)
-and/or [`dependence.update` API reference](https://dependence.enorganic.org/api/update.md) for details
+You may refer to the [`dependence update` CLI reference](https://dependence.enorganic.org/cli/#dependence-update)
+and/or [`dependence.update` API reference](https://dependence.enorganic.org/api/update/) for details
 concerning this command/module, related options, and more complex use
 cases/examples.
