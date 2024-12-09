@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dependence"
-version = "1.0.3"
+version = "1.0.4"
 description = "A dependency management tool for python projects"
 readme = "README.md"
 license = "MIT"
@@ -31,17 +31,20 @@ dependencies = [
 dependence = "dependence.__main__:main"
 
 [project.urls]
-Homepage = "https://dependence.enorganic.org"
+Documentation = "https://dependence.enorganic.org"
+Repository = "https://github.com/enorganic/dependence"
 
 [tool.hatch.build.targets.sdist]
 packages = [
     "src/dependence",
 ]
+sources = ["src"]
 
 [tool.hatch.build.targets.wheel]
 packages = [
     "src/dependence",
 ]
+sources = ["src"]
 
 [tool.hatch.envs.default]
 python = "3.8"
@@ -49,6 +52,12 @@ dependencies = [
     "mypy",
     "pytest",
     "ruff",
+]
+pre-install-commands = [
+    "pip install --upgrade pip setuptools",
+]
+post-install-commands = [
+    "hatch run mypy --install-types --non-interactive || echo",
 ]
 
 [tool.hatch.envs.default.scripts]
@@ -63,21 +72,26 @@ dependencies = [
     "mkdocs-material",
     "mkdocstrings[python]",
     "black",
+    "dependence~=1.0",
 ]
+pre-install-commands = []
+post-install-commands = []
 
 [tool.hatch.envs.docs.env-vars]
 PIP_CONSTRAINT = "docs_requirements.txt"
 
-[tool.hatch.envs.test]
-dependencies = [
-    "pytest",
+[tool.hatch.envs.hatch-test]
+extra-dependencies = [
+    "dependence~=1.0",
 ]
+pre-install-commands = []
+post-install-commands = []
 
-[tool.hatch.envs.test.env-vars]
+[[tool.hatch.envs.hatch-test.matrix]]
+python = ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+
+[tool.hatch.envs.hatch-test.env-vars]
 PIP_CONSTRAINT = "test_requirements.txt"
-
-[tool.hatch.envs.test.scripts]
-test = "py.test"
 
 [tool.ruff]
 line-length = 79
@@ -114,3 +128,18 @@ target-version = [
     "py312",
     "py313",
 ]
+
+[tool.mypy]
+python_version = "3.8"
+files = [
+    "src",
+    "tests",
+]
+exclude = [
+    "tests/test_projects",
+]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.coverage.report]
+fail_under = 80

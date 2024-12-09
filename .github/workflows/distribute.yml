@@ -14,10 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
     - name: Install Hatch
       uses: pypa/hatch@install
     - name: install
@@ -28,8 +24,8 @@ jobs:
         git config --global user.name "$(git --no-pager show -s --format=%an)"
     - name: tag version
       run: |
-        hatch run pip install daves-dev-tools && \
-        hatch run daves-dev-tools git tag-version
+        hatch run pip install gittable && \
+        hatch run gittable tag-version
     - name: push tags
       run: git push --tags || echo "Tag already exists"
     - name: create release
