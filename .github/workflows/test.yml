@@ -39,4 +39,4 @@ jobs:
     - name: Install Hatch
       uses: pypa/hatch@install
     - name: test
-      run: hatch test -c -py ${{ matrix.python }}
+      run: hatch test -py ${{ matrix.python }}

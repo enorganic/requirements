@@ -67,25 +67,21 @@ lint = "ruff check . && ruff format --check . && mypy"
 PIP_CONSTRAINT = "default_requirements.txt"
 
 [tool.hatch.envs.docs]
+template = "docs"
 python = "3.13"
 dependencies = [
     "mkdocs-material",
     "mkdocstrings[python]",
     "black",
-    "dependence~=1.0",
 ]
-pre-install-commands = []
-post-install-commands = []
 
 [tool.hatch.envs.docs.env-vars]
 PIP_CONSTRAINT = "docs_requirements.txt"
 
 [tool.hatch.envs.hatch-test]
-extra-dependencies = [
-    "dependence~=1.0",
-]
-pre-install-commands = []
-post-install-commands = []
+template = "hatch-test"
+extra-dependencies = []
+
 
 [[tool.hatch.envs.hatch-test.matrix]]
 python = ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
@@ -140,6 +136,12 @@ exclude = [
 ]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
+
+[tool.coverage.run]
+omit = ["tests/test_projects"]
+
+[tool.coverage.paths]
+source = ["src/"]
 
 [tool.coverage.report]
 fail_under = 80

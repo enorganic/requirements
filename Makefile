@@ -94,7 +94,7 @@ requirements:
 # Test & check linting/formatting (for local use only)
 test:
 	{ hatch --version || pipx install --upgrade hatch || python3 -m pip install --upgrade hatch ; } && \
-	hatch run lint && hatch test -c
+	hatch run lint && hatch test
 
 format:
 	hatch run ruff check --select I --fix . && \

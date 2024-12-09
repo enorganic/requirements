@@ -1,8 +1,6 @@
 [build-system]
 requires = [
-    "setuptools>=0.0.0",
-    "wheel>=0.0.0",
-    "pip"
+    "setuptools",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -32,46 +30,4 @@ target-version = [
     "py311",
     "py312"
 ]
-
-[tool.tox]
-legacy_tox_ini = """
-    [tox]
-    envlist = pytest, black, flake8, mypy, isort
-
-    [testenv:pytest]
-    deps =
-        -rrequirements.txt
-    commands =
-        py.test --doctest-modules
-
-    [testenv:black]
-    deps =
-        black
-        -crequirements.txt
-    commands =
-        black --check .
-
-    [testenv:flake8]
-    deps =
-        flake8
-        -crequirements.txt
-    commands =
-        flake8
-
-    [testenv:mypy]
-    deps =
-        mypy
-        pytest
-        -crequirements.txt
-    commands =
-        mypy --install-types --non-interactive
-        mypy
-
-    [testenv:isort]
-    deps =
-        isort
-        -crequirements.txt
-    commands =
-        isort -c .
-"""
 
