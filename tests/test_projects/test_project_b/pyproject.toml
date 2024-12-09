@@ -1,8 +1,6 @@
 [build-system]
 requires = [
-    "setuptools>=0.0.0",
-    "wheel>=0.0.0",
-    "pip"
+    "setuptools~=0.0.0",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -11,7 +9,7 @@ name = "test-project-b"
 version = "0.0.0"
 requires-python = ">=3.8"
 dependencies = [
-    "pip",
+    "pip>=0.0",
     "setuptools>=0.0.0",
     "ruff~=0.0",
 ]
@@ -30,5 +28,6 @@ target-version = [
     "py39",
     "py310",
     "py311",
-    "py312"
+    "py312",
+    "py313"
 ]

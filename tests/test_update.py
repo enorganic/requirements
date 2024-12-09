@@ -49,9 +49,7 @@ def validate_zero_specifier(specifier: Specifier) -> None:
 
 
 def validate_requirement(requirement_string: str) -> None:
-    print(requirement_string)
     if requirement_string:
-        print(requirement_string)
         requirement: Requirement = Requirement(requirement_string)
         if requirement.name in ("pip", "setuptools"):
             deque(
@@ -86,7 +84,6 @@ def test_get_updated_setup_cfg() -> None:
     with open(setup_cfg_path) as setup_cfg_io:
         setup_cfg_data: str = setup_cfg_io.read()
         # Update versions for all packages *except* pip
-        print(setup_cfg_data)
         updated_setup_cfg_data = _get_updated_setup_cfg(
             setup_cfg_data,
             ignore=("pip", "setuptools"),
@@ -129,7 +126,8 @@ def test_get_updated_pyproject_toml_a() -> None:
             "After:\n\n"
             f"{updated_pyproject_toml_data.strip()}\n"
         )
-        assert updated_pyproject_toml_data != pyproject_toml_data
+        # Nothing should change for this pyproject.toml file
+        assert updated_pyproject_toml_data == pyproject_toml_data
     # Ensure all versions are updated to a non-zero release number
     validate_requirements(
         tomli.loads(updated_pyproject_toml_data)["build-system"]["requires"]
