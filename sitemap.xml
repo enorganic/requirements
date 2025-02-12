@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://enorganic.github.io/dependence/</loc>
+         <lastmod>2025-02-12</lastmod>
+    </url>
+    <url>
+         <loc>https://enorganic.github.io/dependence/cli/</loc>
+         <lastmod>2025-02-12</lastmod>
+    </url>
+    <url>
+         <loc>https://enorganic.github.io/dependence/contributing/</loc>
+         <lastmod>2025-02-12</lastmod>
+    </url>
+    <url>
+         <loc>https://enorganic.github.io/dependence/api/freeze/</loc>
+         <lastmod>2025-02-12</lastmod>
+    </url>
+    <url>
+         <loc>https://enorganic.github.io/dependence/api/update/</loc>
+         <lastmod>2025-02-12</lastmod>
+    </url>
+</urlset>
