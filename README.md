@@ -139,7 +139,7 @@ $ diff pyproject_before.toml pyproject_after.toml
 ```
 
 As you can see, only the version specifier for tomli changed. We know that
-every dependency was upgraded, wo why was only the `tomli` version specifier
+every dependency was upgraded, so why was only the `tomli` version specifier
 updated? By design. Here are the rules `dependence update` adheres to:
 
 -   We only update requirements versions when they have *inclusive* specifiers.
