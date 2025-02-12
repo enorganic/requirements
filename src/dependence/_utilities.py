@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import functools
 import json
 import os
 import re
 import sys
 from collections import deque
+from collections.abc import Container, Hashable, Iterable, MutableSet
+from collections.abc import Set as AbstractSet
 from configparser import ConfigParser, SectionProxy
 from enum import Enum, auto
 from glob import iglob
@@ -17,20 +21,9 @@ from subprocess import DEVNULL, PIPE, CalledProcessError, list2cmdline, run
 from traceback import format_exception
 from typing import (
     IO,
-    AbstractSet,
     Any,
     Callable,
-    Container,
-    Dict,
-    Hashable,
-    Iterable,
-    List,
-    MutableSet,
-    Optional,
-    Set,
-    Tuple,
     TypedDict,
-    Union,
     cast,
 )
 from warnings import warn
@@ -40,7 +33,7 @@ from jsonpointer import resolve_pointer  # type: ignore
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 
-_BUILTIN_DISTRIBUTION_NAMES: Tuple[str] = ("distribute",)
+_BUILTIN_DISTRIBUTION_NAMES: tuple[str] = ("distribute",)
 _UNSAFE_CHARACTERS_PATTERN: re.Pattern = re.compile("[^A-Za-z0-9.]+")
 
 
@@ -48,7 +41,7 @@ def iter_distinct(items: Iterable[Hashable]) -> Iterable:
     """
     Yield distinct elements, preserving order
     """
-    visited: Set[Hashable] = set()
+    visited: set[Hashable] = set()
     item: Hashable
     for item in items:
         if item not in visited:
@@ -88,8 +81,9 @@ def iter_parse_delimited_values(
 
 
 def check_output(
-    args: Tuple[str, ...],
-    cwd: Union[str, Path] = "",
+    args: tuple[str, ...],
+    cwd: str | Path = "",
+    *,
     echo: bool = False,
 ) -> str:
     """
@@ -98,13 +92,13 @@ def check_output(
 
     Parameters:
 
-    - command (Tuple[str, ...]): The command to run
+    - command (tuple[str, ...]): The command to run
     """
     if echo:
         if cwd:
-            print("$", "cd", cwd, "&&", list2cmdline(args))
+            print("$", "cd", cwd, "&&", list2cmdline(args))  # noqa: T201
         else:
-            print("$", list2cmdline(args))
+            print("$", list2cmdline(args))  # noqa: T201
     output: str = run(
         args,
         stdout=PIPE,
@@ -113,7 +107,7 @@ def check_output(
         cwd=cwd or None,
     ).stdout.decode("utf-8", errors="ignore")
     if echo:
-        print(output)
+        print(output)  # noqa: T201
     return output
 
 
@@ -164,13 +158,13 @@ def deprecated(message: str = "") -> Callable[..., Callable[..., Any]]:
     return decorating_function
 
 
-def split_dot(path: str) -> Tuple[str, ...]:
+def split_dot(path: str) -> tuple[str, ...]:
     return tuple(path.split("."))
 
 
 def tuple_starts_with(
-    a: Tuple[str, ...],
-    b: Tuple[str, ...],
+    a: tuple[str, ...],
+    b: tuple[str, ...],
 ) -> bool:
     """
     Determine if tuple `a` starts with tuple `b`
@@ -179,18 +173,18 @@ def tuple_starts_with(
 
 
 def tuple_starts_with_any(
-    a: Tuple[str, ...],
-    bs: Tuple[Tuple[str, ...], ...],
+    a: tuple[str, ...],
+    bs: tuple[tuple[str, ...], ...],
 ) -> bool:
     """
     Determine if tuple `a` starts with any tuple in `bs`
     """
-    b: Tuple[str, ...]
+    b: tuple[str, ...]
     return any(tuple_starts_with(a, b) for b in bs)
 
 
 def iter_find_qualified_lists(
-    data: Union[Dict[str, Any], list],
+    data: dict[str, Any] | list,
     item_condition: Callable[[Any], bool],
     exclude_object_ids: AbstractSet[int] = frozenset(),
 ) -> Iterable[list]:
@@ -262,9 +256,8 @@ def iter_find_qualified_lists(
     if id(data) in exclude_object_ids:
         return
     if isinstance(data, dict):
-        _key: str
         value: Any
-        for _key, value in data.items():
+        for value in data.values():
             if isinstance(value, (list, dict)):
                 yield from iter_find_qualified_lists(
                     value, item_condition, exclude_object_ids
@@ -305,18 +298,16 @@ def get_configuration_file_type(path: str) -> ConfigurationFileType:
     basename: str = os.path.basename(path).lower()
     if basename == "setup.cfg":
         return ConfigurationFileType.SETUP_CFG
-    elif basename == "tox.ini":
+    if basename == "tox.ini":
         return ConfigurationFileType.TOX_INI
-    elif basename == "pyproject.toml":
+    if basename == "pyproject.toml":
         return ConfigurationFileType.PYPROJECT_TOML
-    elif basename.endswith(".txt"):
+    if basename.endswith(".txt"):
         return ConfigurationFileType.REQUIREMENTS_TXT
-    elif basename.endswith(".toml"):
+    if basename.endswith(".toml"):
         return ConfigurationFileType.TOML
-    else:
-        raise ValueError(
-            f"{path} is not a recognized type of configuration file."
-        )
+    message: str = f"{path} is not a recognized type of configuration file."
+    raise ValueError(message)
 
 
 def is_configuration_file(path: str) -> bool:
@@ -333,7 +324,7 @@ class _EditablePackageMetadata(TypedDict):
     editable_project_location: str
 
 
-def _iter_editable_distribution_locations() -> Iterable[Tuple[str, str]]:
+def _iter_editable_distribution_locations() -> Iterable[tuple[str, str]]:
     metadata: _EditablePackageMetadata
     for metadata in json.loads(
         check_output(
@@ -354,7 +345,7 @@ def _iter_editable_distribution_locations() -> Iterable[Tuple[str, str]]:
 
 
 @functools.lru_cache
-def get_editable_distributions_locations() -> Dict[str, str]:
+def get_editable_distributions_locations() -> dict[str, str]:
     """
     Get a mapping of (normalized) editable distribution names to their
     locations.
@@ -384,12 +375,12 @@ def refresh_editable_distributions() -> None:
 
 
 @functools.lru_cache
-def get_installed_distributions() -> Dict[str, Distribution]:
+def get_installed_distributions() -> dict[str, Distribution]:
     """
     Return a dictionary of installed distributions.
     """
     refresh_editable_distributions()
-    installed: Dict[str, Distribution] = {}
+    installed: dict[str, Distribution] = {}
     for distribution in _get_distributions():
         installed[normalize_name(distribution.metadata["Name"])] = distribution
     return installed
@@ -425,7 +416,7 @@ def is_requirement_string(requirement_string: str) -> bool:
 
 
 def _iter_file_requirement_strings(path: str) -> Iterable[str]:
-    lines: List[str]
+    lines: list[str]
     requirement_file_io: IO[str]
     with open(path) as requirement_file_io:
         lines = requirement_file_io.readlines()
@@ -459,7 +450,7 @@ def _iter_setup_cfg_requirement_strings(path: str) -> Iterable[str]:
 
 
 def _iter_tox_ini_requirement_strings(
-    path: Union[str, Path, ConfigParser] = "",
+    path: str | Path | ConfigParser = "",
     string: str = "",
 ) -> Iterable[str]:
     """
@@ -472,13 +463,19 @@ def _iter_tox_ini_requirement_strings(
     - string (str) = "": The contents of a tox.ini file
     """
     parser: ConfigParser = ConfigParser()
+    message: str
     if path:
-        assert (
-            not string
-        ), "Either `path` or `string` arguments may be provided, but not both"
+        if string:
+            message = (
+                "Either `path` or `string` arguments may be provided, but not "
+                "both"
+            )
+            raise ValueError(message)
         parser.read(path)
     else:
-        assert string, "Either a `path` or `string` argument must be provided"
+        if not string:
+            message = "Either a `path` or `string` argument must be provided"
+            raise ValueError(message)
         parser.read_string(string)
 
     def get_section_option_requirements(
@@ -525,10 +522,10 @@ def _is_installed_requirement_string(item: Any) -> bool:
 
 
 def iter_find_requirements_lists(
-    document: Union[Dict[str, Any], list],
-    include_pointers: Tuple[str, ...] = (),
-    exclude_pointers: Tuple[str, ...] = (),
-) -> Iterable[List[str]]:
+    document: dict[str, Any] | list,
+    include_pointers: tuple[str, ...] = (),
+    exclude_pointers: tuple[str, ...] = (),
+) -> Iterable[list[str]]:
     """
     Recursively yield all lists of valid requirement strings for installed
     packages. Exclusions are resolved before inclusions.
@@ -581,8 +578,8 @@ def iter_find_requirements_lists(
 
 def _iter_toml_requirement_strings(
     path: str,
-    include_pointers: Tuple[str, ...] = (),
-    exclude_pointers: Tuple[str, ...] = (),
+    include_pointers: tuple[str, ...] = (),
+    exclude_pointers: tuple[str, ...] = (),
 ) -> Iterable[str]:
     """
     Read a TOML file and yield the requirements found.
@@ -597,7 +594,7 @@ def _iter_toml_requirement_strings(
     # Parse pyproject.toml
     try:
         with open(path, "rb") as pyproject_io:
-            document: Dict[str, Any] = tomli.load(pyproject_io)
+            document: dict[str, Any] = tomli.load(pyproject_io)
     except FileNotFoundError:
         return
     # Find requirements
@@ -615,8 +612,8 @@ def _iter_toml_requirement_strings(
 def iter_configuration_file_requirement_strings(
     path: str,
     *,
-    include_pointers: Tuple[str, ...] = (),
-    exclude_pointers: Tuple[str, ...] = (),
+    include_pointers: tuple[str, ...] = (),
+    exclude_pointers: tuple[str, ...] = (),
 ) -> Iterable[str]:
     """
     Read a configuration file and yield the parsed requirements.
@@ -633,7 +630,7 @@ def iter_configuration_file_requirement_strings(
     )
     if configuration_file_type == ConfigurationFileType.SETUP_CFG:
         return _iter_setup_cfg_requirement_strings(path)
-    elif configuration_file_type in (
+    if configuration_file_type in (
         ConfigurationFileType.PYPROJECT_TOML,
         ConfigurationFileType.TOML,
     ):
@@ -642,13 +639,11 @@ def iter_configuration_file_requirement_strings(
             include_pointers=include_pointers,
             exclude_pointers=exclude_pointers,
         )
-    elif configuration_file_type == ConfigurationFileType.TOX_INI:
+    if configuration_file_type == ConfigurationFileType.TOX_INI:
         return _iter_tox_ini_requirement_strings(path=path)
-    else:
-        assert (
-            configuration_file_type == ConfigurationFileType.REQUIREMENTS_TXT
-        )
-        return _iter_file_requirement_strings(path)
+    if configuration_file_type != ConfigurationFileType.REQUIREMENTS_TXT:
+        raise ValueError(configuration_file_type)
+    return _iter_file_requirement_strings(path)
 
 
 @functools.lru_cache
@@ -669,15 +664,14 @@ def _get_setup_cfg_metadata(path: str, key: str) -> str:
         parser.read(path)
         if "metadata" in parser:
             return parser.get("metadata", key, fallback="")
-        else:
-            warn(
-                f"No `metadata` section found in: {path}",
-                stacklevel=2,
-            )
+        warn(
+            f"No `metadata` section found in: {path}",
+            stacklevel=2,
+        )
     return ""
 
 
-def _get_setup_py_metadata(path: str, args: Tuple[str, ...]) -> str:
+def _get_setup_py_metadata(path: str, args: tuple[str, ...]) -> str:
     """
     Execute a setup.py script with `args` and return the response.
 
@@ -699,7 +693,7 @@ def _get_setup_py_metadata(path: str, args: Tuple[str, ...]) -> str:
             os.chdir(directory)
             path = os.path.join(directory, "setup.py")
         if os.path.isfile(path):
-            command: Tuple[str, ...] = (sys.executable, path) + args
+            command: tuple[str, ...] = (sys.executable, path, *args)
             try:
                 value = check_output(command).strip().split("\n")[-1]
             except CalledProcessError:
@@ -713,7 +707,7 @@ def _get_setup_py_metadata(path: str, args: Tuple[str, ...]) -> str:
                 setup_egg_info(directory)
                 try:
                     value = check_output(command).strip().split("\n")[-1]
-                except Exception:
+                except Exception:  # noqa: BLE001
                     warn(
                         f"A package name could not be found in {path}"
                         f"\nError ignored: {get_exception_text()}",
@@ -732,7 +726,7 @@ def _get_pyproject_toml_project_metadata(path: str, key: str) -> str:
     if os.path.isfile(path):
         pyproject_io: IO[str]
         with open(path) as pyproject_io:
-            pyproject: Dict[str, Any] = tomli.loads(pyproject_io.read())
+            pyproject: dict[str, Any] = tomli.loads(pyproject_io.read())
             if "project" in pyproject:
                 return pyproject["project"].get(key, "")
     return ""
@@ -760,15 +754,15 @@ def get_setup_distribution_version(path: str) -> str:
     )
 
 
-def _setup(arguments: Tuple[str, ...]) -> None:
+def _setup(arguments: tuple[str, ...]) -> None:
     try:
-        check_output((sys.executable, "setup.py") + arguments)
+        check_output((sys.executable, "setup.py", *arguments))
     except CalledProcessError:
         warn(f"Ignoring error: {get_exception_text()}", stacklevel=2)
 
 
 def _setup_location(
-    location: Union[str, Path], arguments: Iterable[Tuple[str, ...]]
+    location: str | Path, arguments: Iterable[tuple[str, ...]]
 ) -> None:
     if isinstance(location, str):
         location = Path(location)
@@ -789,7 +783,7 @@ def get_editable_distribution_location(name: str) -> str:
     return get_editable_distributions_locations().get(normalize_name(name), "")
 
 
-def setup_egg_info(directory: Union[str, Path], egg_base: str = "") -> None:
+def setup_egg_info(directory: str | Path, egg_base: str = "") -> None:
     """
     Refresh egg-info for the editable package installed in
     `directory` (only applicable for packages using a `setup.py` script)
@@ -819,27 +813,30 @@ def get_requirement(
 ) -> Requirement:
     try:
         return Requirement(requirement_string)
-    except InvalidRequirement:
+    except InvalidRequirement as error:
         # Try to parse the requirement as an installation target location,
         # such as can be used with `pip install`
         location: str = requirement_string
         extras: str = ""
         if "[" in requirement_string and requirement_string.endswith("]"):
-            parts: List[str] = requirement_string.split("[")
+            parts: list[str] = requirement_string.split("[")
             location = "[".join(parts[:-1])
             extras = f"[{parts[-1]}"
         location = os.path.abspath(location)
         name: str = get_setup_distribution_name(location)
-        assert name, f"No distribution found in {location}"
+        if not name:
+            message: str = f"No distribution found in {location}"
+            raise FileNotFoundError(message) from error
         return Requirement(f"{name}{extras}")
 
 
 def get_required_distribution_names(
     requirement_string: str,
+    *,
     exclude: Iterable[str] = (),
     recursive: bool = True,
     echo: bool = False,
-    depth: Optional[int] = None,
+    depth: int | None = None,
 ) -> MutableSet[str]:
     """
     Return a `tuple` of all distribution names which are required by the
@@ -878,10 +875,7 @@ def _get_requirement_name(requirement: Requirement) -> str:
     return normalize_name(requirement.name)
 
 
-def install_requirement(
-    requirement: Union[str, Requirement],
-    echo: bool = True,
-) -> None:
+def install_requirement(requirement: str | Requirement) -> None:
     """
     Install a requirement
 
@@ -899,13 +893,14 @@ def install_requirement(
 def _install_requirement_string(
     requirement_string: str,
     name: str = "",
+    *,
     editable: bool = False,
 ) -> None:
     """
     Install a requirement string with no dependencies, compilation, build
     isolation, etc.
     """
-    command: Tuple[str, ...] = (
+    command: tuple[str, ...] = (
         sys.executable,
         "-m",
         "pip",
@@ -943,13 +938,13 @@ def _install_requirement_string(
             )
         )
         if not editable:
-            print(message)
-            raise error
+            print(message)  # noqa: T201
+            raise
         try:
-            check_output(command + ("--force-reinstall",))
-        except CalledProcessError as retry_error:
-            print(message)
-            raise retry_error
+            check_output((*command, "--force-reinstall"))
+        except CalledProcessError:
+            print(message)  # noqa: T201
+            raise
 
 
 def _install_requirement(
@@ -957,7 +952,7 @@ def _install_requirement(
 ) -> None:
     requirement_string: str = str(requirement)
     # Get the distribution name
-    distribution: Optional[Distribution] = None
+    distribution: Distribution | None = None
     editable_location: str = ""
     try:
         distribution = _get_distribution(requirement.name)
@@ -987,9 +982,10 @@ def _install_requirement(
 def _get_requirement_distribution(
     requirement: Requirement,
     name: str,
+    *,
     reinstall: bool = True,
     echo: bool = False,
-) -> Optional[Distribution]:
+) -> Distribution | None:
     if name in _BUILTIN_DISTRIBUTION_NAMES:
         return None
     try:
@@ -1004,7 +1000,7 @@ def _get_requirement_distribution(
                 stacklevel=2,
             )
         # Attempt to install the requirement...
-        install_requirement(requirement, echo=echo)
+        install_requirement(requirement)
         return _get_requirement_distribution(
             requirement, name, reinstall=False, echo=echo
         )
@@ -1012,7 +1008,7 @@ def _get_requirement_distribution(
 
 def _iter_distribution_requirements(
     distribution: Distribution,
-    extras: Tuple[str, ...] = (),
+    extras: tuple[str, ...] = (),
     exclude: Container[str] = (),
 ) -> Iterable[Requirement]:
     if not distribution.requires:
@@ -1031,24 +1027,25 @@ def _iter_distribution_requirements(
 
 def _iter_requirement_names(
     requirement: Requirement,
+    *,
     exclude: MutableSet[str],
     recursive: bool = True,
     echo: bool = False,
-    depth: Optional[int] = None,
+    depth: int | None = None,
 ) -> Iterable[str]:
     name: str = normalize_name(requirement.name)
-    extras: Tuple[str, ...] = tuple(requirement.extras)
+    extras: tuple[str, ...] = tuple(requirement.extras)
     if name in exclude:
         return ()
     # Ensure we don't follow the same requirement again, causing cyclic
     # recursion
     exclude.add(name)
-    distribution: Optional[Distribution] = _get_requirement_distribution(
+    distribution: Distribution | None = _get_requirement_distribution(
         requirement, name, echo=echo
     )
     if distribution is None:
         return ()
-    requirements: Tuple[Requirement, ...] = tuple(
+    requirements: tuple[Requirement, ...] = tuple(
         iter_distinct(
             _iter_distribution_requirements(
                 distribution,
@@ -1061,7 +1058,7 @@ def _iter_requirement_names(
 
     def iter_requirement_names_(
         requirement_: Requirement,
-        depth_: Optional[int] = None,
+        depth_: int | None = None,
     ) -> Iterable[str]:
         if (depth_ is None) or depth_ >= 0:
             yield from _iter_requirement_names(

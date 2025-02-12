@@ -1,7 +1,7 @@
 from collections import deque
+from collections.abc import Iterable
 from configparser import ConfigParser
 from pathlib import Path
-from typing import Iterable
 
 import pytest
 import tomli
@@ -89,7 +89,7 @@ def test_get_updated_setup_cfg() -> None:
             ignore=("pip", "setuptools"),
             all_extra_name="all",
         )
-        print(
+        print(  # noqa: T201
             f"{str(setup_cfg_path).strip()}\n\n"
             "Before:\n\n"
             f"{setup_cfg_data.strip()}\n\n"
@@ -119,7 +119,7 @@ def test_get_updated_pyproject_toml_a() -> None:
             pyproject_toml_data,
             ignore=("pip", "setuptools"),
         )
-        print(
+        print(  # noqa: T201
             f"{str(pyproject_toml_path).strip()}\n\n"
             "Before:\n\n"
             f"{pyproject_toml_data.strip()}\n\n"
@@ -147,7 +147,7 @@ def test_get_updated_pyproject_toml_b() -> None:
             pyproject_toml_data,
             ignore=("pip", "setuptools"),
         )
-        print(
+        print(  # noqa: T201
             f"{str(pyproject_toml_path).strip()}\n\n"
             "Before:\n\n"
             f"{pyproject_toml_data.strip()}\n\n"
@@ -180,7 +180,7 @@ def test_get_updated_requirements_txt() -> None:
             updated_requirements_txt_data: str = _get_updated_requirements_txt(
                 requirements_txt_data, ignore=("pip", "setuptools")
             )
-            print(
+            print(  # noqa: T201
                 f"{str(requirements_txt_path).strip()}\n\n"
                 "Before:\n\n"
                 f"{requirements_txt_data.strip()}\n\n"

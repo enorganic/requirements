@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 import argparse
+from collections.abc import Iterable, MutableSet
 from fnmatch import fnmatch
 from functools import partial
 from importlib.metadata import Distribution
 from importlib.metadata import distribution as _get_distribution
 from itertools import chain
-from typing import Dict, Iterable, MutableSet, Optional, Tuple, cast
+from typing import cast
 
-from ._utilities import (
+from dependence._utilities import (
     get_distribution,
     get_required_distribution_names,
     get_requirement_string_distribution_name,
@@ -30,18 +33,18 @@ def _iter_sort_dependents_last(requirements: Iterable[str]) -> Iterable[str]:
     """
     requirements = list(requirements)
     distribution_name: str
-    distribution_requirement: Dict[str, str] = {
+    distribution_requirement: dict[str, str] = {
         get_requirement_string_distribution_name(requirement): requirement
         for requirement in requirements
     }
-    dependent_dependencies: Dict[str, MutableSet[str]] = {
+    dependent_dependencies: dict[str, MutableSet[str]] = {
         distribution_name: get_required_distribution_names(requirement)
         for distribution_name, requirement in distribution_requirement.items()
     }
     while dependent_dependencies:
         dependent: str
         dependencies: MutableSet[str]
-        item: Tuple[str, MutableSet[str]]
+        item: tuple[str, MutableSet[str]]
         for dependent, dependencies in sorted(  # noqa: C414
             tuple(dependent_dependencies.items()),
             key=lambda item: item[0].lower(),
@@ -73,15 +76,16 @@ def _iter_sort_dependents_last(requirements: Iterable[str]) -> Iterable[str]:
 
 def get_frozen_requirements(
     requirements: Iterable[str] = (),
+    *,
     exclude: Iterable[str] = (),
     exclude_recursive: Iterable[str] = (),
     no_version: Iterable[str] = (),
     dependency_order: bool = False,
     reverse: bool = False,
-    depth: Optional[int] = None,
-    include_pointers: Tuple[str, ...] = (),
-    exclude_pointers: Tuple[str, ...] = (),
-) -> Tuple[str, ...]:
+    depth: int | None = None,
+    include_pointers: tuple[str, ...] = (),
+    exclude_pointers: tuple[str, ...] = (),
+) -> tuple[str, ...]:
     """
     Get the (frozen) requirements for one or more specified distributions or
     configuration files.
@@ -183,7 +187,7 @@ def _iter_frozen_requirements(
     exclude: MutableSet[str],
     exclude_recursive: MutableSet[str],
     no_version: Iterable[str] = (),
-    depth: Optional[int] = None,
+    depth: int | None = None,
 ) -> Iterable[str]:
     def get_requirement_string(distribution_name: str) -> str:
         def distribution_name_matches_pattern(pattern: str) -> bool:
@@ -198,13 +202,13 @@ def _iter_frozen_requirements(
             distribution = get_distribution(distribution_name)
         except KeyError:
             # If the distribution is missing, install it
-            install_requirement(distribution_name, echo=False)
+            install_requirement(distribution_name)
             distribution = _get_distribution(distribution_name)
         return f"{distribution.metadata['Name']}=={distribution.version}"
 
     def get_required_distribution_names_(
         requirement_string: str,
-        depth_: Optional[int] = None,
+        depth_: int | None = None,
     ) -> MutableSet[str]:
         name: str = get_requirement_string_distribution_name(
             requirement_string
@@ -234,20 +238,20 @@ def _iter_frozen_requirements(
             )
         ),
     )
-    requirements = map(get_requirement_string, requirements)
-    return requirements
+    return map(get_requirement_string, requirements)
 
 
 def freeze(
     requirements: Iterable[str] = (),
+    *,
     exclude: Iterable[str] = (),
     exclude_recursive: Iterable[str] = (),
     no_version: Iterable[str] = (),
     dependency_order: bool = False,
     reverse: bool = False,
-    depth: Optional[int] = None,
-    include_pointers: Tuple[str, ...] = (),
-    exclude_pointers: Tuple[str, ...] = (),
+    depth: int | None = None,
+    include_pointers: tuple[str, ...] = (),
+    exclude_pointers: tuple[str, ...] = (),
 ) -> None:
     """
     Print the (frozen) requirements for one or more specified requirements or
@@ -273,7 +277,7 @@ def freeze(
         exclude_pointers: If not empty, these TOML tables will *not* be
             inspected (for pyproject.toml files)
     """
-    print(
+    print(  # noqa: T201
         "\n".join(
             get_frozen_requirements(
                 requirements=requirements,
