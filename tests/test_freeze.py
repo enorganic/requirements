@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import AbstractSet, List, MutableSet, Tuple
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -9,13 +9,18 @@ from dependence._utilities import (
 )
 from dependence.freeze import get_frozen_requirements
 
+if TYPE_CHECKING:
+    from collections.abc import MutableSet
+    from collections.abc import Set as AbstractSet
+
+
 TEST_PROJECT_A: Path = (
     Path(__file__).absolute().parent.joinpath("test_projects/test_project_a/")
 )
 TEST_PROJECT_B: Path = (
     Path(__file__).absolute().parent.joinpath("test_projects/test_project_b/")
 )
-REQUIREMENTS_A: Tuple[str, ...] = (
+REQUIREMENTS_A: tuple[str, ...] = (
     str(TEST_PROJECT_A.joinpath("requirements.txt")),
     str(TEST_PROJECT_A.joinpath("setup.cfg")),
     str(TEST_PROJECT_A.joinpath("pyproject.toml")),
@@ -26,10 +31,10 @@ def test_freeze_order() -> None:
     """
     Verify the sorting of frozen requirements
     """
-    error_messages: List[str] = []
+    error_messages: list[str] = []
     required: MutableSet[str] = set()
     requirement: str
-    frozen_requirements: Tuple[str, ...] = get_frozen_requirements(
+    frozen_requirements: tuple[str, ...] = get_frozen_requirements(
         requirements=REQUIREMENTS_A, dependency_order=True
     )
     assert frozen_requirements
@@ -48,7 +53,7 @@ def test_freeze_order() -> None:
             if name not in get_required_distribution_names(
                 shared_required_distribution_name
             ):
-                error_messages.append(
+                error_messages.append(  # noqa: PERF401
                     "Dependency sorting is incorrect: "
                     f"{name} should come before "
                     f"{shared_required_distribution_name}"

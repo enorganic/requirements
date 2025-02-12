@@ -6,11 +6,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dependence"
-version = "1.0.4"
+version = "1.0.5"
 description = "A dependency management tool for python projects"
 readme = "README.md"
 license = "MIT"
-requires-python = "~=3.8"
+requires-python = "~=3.9"
 authors = [
     { email = "david@belais.me" },
 ]
@@ -22,7 +22,7 @@ dependencies = [
     "packaging",
     "pip",
     "setuptools>63",
-    "tomli-w~=1.0",
+    "tomli-w~=1.2",
     "tomli~=2.2",
     "jsonpointer",
 ]
@@ -38,16 +38,20 @@ Repository = "https://github.com/enorganic/dependence"
 packages = [
     "src/dependence",
 ]
-sources = ["src"]
+sources = [
+    "src",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = [
     "src/dependence",
 ]
-sources = ["src"]
+sources = [
+    "src",
+]
 
 [tool.hatch.envs.default]
-python = "3.8"
+python = "3.9"
 dependencies = [
     "mypy",
     "pytest",
@@ -63,8 +67,6 @@ post-install-commands = [
 [tool.hatch.envs.default.scripts]
 lint = "ruff check . && ruff format --check . && mypy"
 
-[tool.hatch.envs.default.env-vars]
-PIP_CONSTRAINT = "default_requirements.txt"
 
 [tool.hatch.envs.docs]
 template = "docs"
@@ -75,26 +77,28 @@ dependencies = [
     "black",
 ]
 
-[tool.hatch.envs.docs.env-vars]
-PIP_CONSTRAINT = "docs_requirements.txt"
-
 [tool.hatch.envs.hatch-test]
 template = "hatch-test"
 extra-dependencies = []
 
-
 [[tool.hatch.envs.hatch-test.matrix]]
-python = ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+python = [
+    "3.9",
+    "3.10",
+    "3.11",
+    "3.12",
+    "3.13",
+]
 
-[tool.hatch.envs.hatch-test.env-vars]
-PIP_CONSTRAINT = "test_requirements.txt"
 
 [tool.ruff]
 line-length = 79
 
+
 [tool.ruff.lint]
 ignore = [
     "F842",
+    "INP001",
 ]
 extend-select = [
     "E",
@@ -117,7 +121,6 @@ docstring-code-line-length = 20
 [tool.black]
 line-length = 79
 target-version = [
-    "py38",
     "py39",
     "py310",
     "py311",
@@ -126,7 +129,7 @@ target-version = [
 ]
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.9"
 files = [
     "src",
     "tests",
@@ -138,10 +141,14 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
 [tool.coverage.run]
-omit = ["tests/test_projects"]
+omit = [
+    "tests/test_projects",
+]
 
 [tool.coverage.paths]
-source = ["src/"]
+source = [
+    "src/",
+]
 
 [tool.coverage.report]
 fail_under = 80

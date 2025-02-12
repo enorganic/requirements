@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "test-project-c"
 version = "0.0.0"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     "pip",
     "setuptools>=0.0.0",
@@ -24,10 +24,10 @@ packages = ["test_project_b"]
 [tool.black]
 line-length = 79
 target-version = [
-    "py38",
     "py39",
     "py310",
     "py311",
-    "py312"
+    "py312",
+    "py313"
 ]
 

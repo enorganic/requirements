@@ -1,23 +1,18 @@
+from __future__ import annotations
+
 import argparse
 import re
 from collections import deque
 from configparser import ConfigParser, SectionProxy
 from copy import deepcopy
 from dataclasses import dataclass
-from importlib.metadata import Distribution
 from io import StringIO
 from itertools import chain
 from typing import (
     IO,
+    TYPE_CHECKING,
     Any,
     Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Union,
 )
 
 import tomli
@@ -27,7 +22,7 @@ from packaging.specifiers import Specifier, SpecifierSet
 from packaging.version import Version
 from packaging.version import parse as parse_version
 
-from ._utilities import (
+from dependence._utilities import (
     ConfigurationFileType,
     get_configuration_file_type,
     get_installed_distributions,
@@ -37,6 +32,10 @@ from ._utilities import (
     iter_parse_delimited_values,
     normalize_name,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from importlib.metadata import Distribution
 
 
 @dataclass
@@ -48,7 +47,7 @@ class _Version:
     """
 
     epoch: int
-    release: Tuple[int, ...]
+    release: tuple[int, ...]
     pre: Any
     post: Any
     dev: Any
@@ -64,13 +63,14 @@ def _update_requirement_specifiers(
     """
     installed_version: Version = parse_version(installed_version_string)
     specifier: Specifier
-    updated_specifier_strings: List[str] = []
+    updated_specifier_strings: list[str] = []
     for specifier in requirement.specifier:  # type: ignore
         # Only update requirement to match our installed version
         # if the requirement is *inclusive*
         if ("=" in specifier.operator) and ("!" not in specifier.operator):
             specifier_version: Version = parse_version(specifier.version)
-            assert installed_version.release is not None
+            if installed_version.release is None:
+                raise ValueError(installed_version)
             if specifier_version.release is None:
                 updated_specifier_strings.append(f"{specifier.operator}")
             else:
@@ -117,7 +117,7 @@ def _update_requirement_specifiers(
 
 
 def _get_updated_requirement_string(
-    requirement_string: str, ignore: Set[str]
+    requirement_string: str, ignore: set[str]
 ) -> str:
     """
     This function updates version numbers in a requirement string to match
@@ -139,8 +139,8 @@ def _get_updated_requirement_string(
     return str(requirement)
 
 
-def _normalize_ignore_argument(ignore: Iterable[str]) -> Set[str]:
-    ignore_set: Set[str]
+def _normalize_ignore_argument(ignore: Iterable[str]) -> set[str]:
+    ignore_set: set[str]
     # Normalize/harmonize excluded project names
     if isinstance(ignore, str):
         ignore = (ignore,)
@@ -161,7 +161,7 @@ def _get_updated_requirements_txt(
     - data (str): The contents of a *requirements.txt* file
     - ignore ([str]): One or more project names to leave as-is
     """
-    ignore_set: Set[str] = _normalize_ignore_argument(ignore)
+    ignore_set: set[str] = _normalize_ignore_argument(ignore)
 
     def get_updated_requirement_string(requirement: str) -> str:
         return _get_updated_requirement_string(requirement, ignore=ignore_set)
@@ -184,7 +184,7 @@ def _get_updated_setup_cfg(
     - all_extra_name (str): An (optional) extra name which will
       consolidate requirements from all other extras
     """
-    ignore_set: Set[str] = _normalize_ignore_argument(ignore)
+    ignore_set: set[str] = _normalize_ignore_argument(ignore)
 
     def get_updated_requirement_string(requirement: str) -> str:
         return _get_updated_requirement_string(requirement, ignore=ignore_set)
@@ -202,10 +202,10 @@ def _get_updated_setup_cfg(
         )
     if "options.extras_require" in parser:
         extras_require: SectionProxy = parser["options.extras_require"]
-        all_extra_requirements: List[str] = []
+        all_extra_requirements: list[str] = []
         extra_name: str
         extra_requirements_string: str
-        extra_requirements: List[str]
+        extra_requirements: list[str]
         for extra_name, extra_requirements_string in extras_require.items():
             if extra_name != all_extra_name:
                 extra_requirements = list(
@@ -223,7 +223,7 @@ def _get_updated_setup_cfg(
             # We pre-pend an empty requirement string in order to]
             # force new-line creation at the beginning of the extra
             extras_require[all_extra_name] = "\n".join(
-                iter_distinct([""] + all_extra_requirements)
+                iter_distinct(["", *all_extra_requirements])
             )
     # Return as a string
     setup_cfg: str
@@ -246,10 +246,10 @@ def _get_updated_tox_ini(data: str, ignore: Iterable[str] = ()) -> str:
     - data (str): The contents of a **tox.ini** file
     - ignore ([str]): One or more project names to leave as-is
     """
-    ignore_set: Set[str] = _normalize_ignore_argument(ignore)
+    ignore_set: set[str] = _normalize_ignore_argument(ignore)
 
     def get_updated_requirement_string(requirement: str) -> str:
-        prefix: Optional[str] = None
+        prefix: str | None = None
         if ":" in requirement:
             prefix, requirement = requirement.split(":", maxsplit=1)
         requirement = _get_updated_requirement_string(
@@ -294,18 +294,18 @@ def _get_updated_tox_ini(data: str, ignore: Iterable[str] = ()) -> str:
 
 
 def _update_document_requirements(
-    document: Dict[str, Any],
+    document: dict[str, Any],
     ignore: Iterable[str] = (),
-    include_pointers: Tuple[str, ...] = (),
-    exclude_pointers: Tuple[str, ...] = (),
+    include_pointers: tuple[str, ...] = (),
+    exclude_pointers: tuple[str, ...] = (),
 ) -> None:
-    ignore_set: Set[str] = _normalize_ignore_argument(ignore)
+    ignore_set: set[str] = _normalize_ignore_argument(ignore)
 
     def get_updated_requirement_string(requirement: str) -> str:
         return _get_updated_requirement_string(requirement, ignore=ignore_set)
 
     # Find and update requirements
-    requirements_list: List[str]
+    requirements_list: list[str]
     for requirements_list in iter_find_requirements_lists(
         document,
         include_pointers=include_pointers,
@@ -323,8 +323,8 @@ def _get_updated_pyproject_toml(
     data: str,
     ignore: Iterable[str] = (),
     all_extra_name: str = "",
-    include_pointers: Tuple[str, ...] = (),
-    exclude_pointers: Tuple[str, ...] = (),
+    include_pointers: tuple[str, ...] = (),
+    exclude_pointers: tuple[str, ...] = (),
 ) -> str:
     """
     Return the contents of a *pyproject.toml* file, updated to reflect the
@@ -345,8 +345,8 @@ def _get_updated_pyproject_toml(
         The contents of the updated pyproject.toml file.
     """
     # Parse pyproject.toml
-    original_pyproject: Dict[str, Any] = tomli.loads(data)
-    updated_pyproject: Dict[str, Any] = deepcopy(original_pyproject)
+    original_pyproject: dict[str, Any] = tomli.loads(data)
+    updated_pyproject: dict[str, Any] = deepcopy(original_pyproject)
     # Find and update requirements
     _update_document_requirements(
         updated_pyproject,
@@ -355,13 +355,13 @@ def _get_updated_pyproject_toml(
         exclude_pointers=exclude_pointers,
     )
     # Update consolidated optional requirements
-    project_optional_dependencies: Dict[str, List[str]] = (
+    project_optional_dependencies: dict[str, list[str]] = (
         updated_pyproject.get("project", {}).get("optional-dependencies", {})
     )
     # Update an extra indicated to encompass all other extras
     if project_optional_dependencies and all_extra_name:
         key: str
-        dependencies: List[str]
+        dependencies: list[str]
         project_optional_dependencies[all_extra_name] = list(
             iter_distinct(
                 chain(
@@ -384,8 +384,8 @@ def _get_updated_pyproject_toml(
 def _get_updated_toml(
     data: str,
     ignore: Iterable[str] = (),
-    include_pointers: Tuple[str, ...] = (),
-    exclude_pointers: Tuple[str, ...] = (),
+    include_pointers: tuple[str, ...] = (),
+    exclude_pointers: tuple[str, ...] = (),
 ) -> str:
     """
     Return the contents of a TOML file, updated to reflect the
@@ -407,8 +407,8 @@ def _get_updated_toml(
         The contents of the updated TOML file.
     """
     # Parse pyproject.toml
-    original_pyproject: Dict[str, Any] = tomli.loads(data)
-    updated_pyproject: Dict[str, Any] = deepcopy(original_pyproject)
+    original_pyproject: dict[str, Any] = tomli.loads(data)
+    updated_pyproject: dict[str, Any] = deepcopy(original_pyproject)
     # Find and update requirements
     _update_document_requirements(
         updated_pyproject,
@@ -426,12 +426,12 @@ def _update(
     path: str,
     ignore: Iterable[str] = (),
     all_extra_name: str = "",
-    include_pointers: Tuple[str, ...] = (),
-    exclude_pointers: Tuple[str, ...] = (),
+    include_pointers: tuple[str, ...] = (),
+    exclude_pointers: tuple[str, ...] = (),
 ) -> None:
     data: str
     update_function: Callable[[str], str]
-    kwargs: Dict[str, Union[str, Iterable[str]]] = {}
+    kwargs: dict[str, str | Iterable[str]] = {}
     configuration_file_type: ConfigurationFileType = (
         get_configuration_file_type(path)
     )
@@ -457,18 +457,21 @@ def _update(
     elif configuration_file_type == ConfigurationFileType.REQUIREMENTS_TXT:
         update_function = _get_updated_requirements_txt
     else:
-        raise NotImplementedError(
-            f"Updating requirements for {path} is not supported"
-        )
+        msg = f"Updating requirements for {path} is not supported"
+        raise NotImplementedError(msg)
     kwargs["ignore"] = ignore
     file_io: IO[str]
     with open(path) as file_io:
         data = file_io.read()
     updated_data: str = update_function(data, **kwargs)
     if updated_data == data:
-        print(f"All requirements were already up-to-date in {path}")
+        print(  # noqa: T201
+            f"All requirements were already up-to-date in {path}"
+        )
     else:
-        print(f"Updating requirements in {path}")
+        print(  # noqa: T201
+            f"Updating requirements in {path}"
+        )
         with open(path, "w") as file_io:
             file_io.write(updated_data)
 
@@ -477,8 +480,8 @@ def update(
     paths: Iterable[str],
     ignore: Iterable[str] = (),
     all_extra_name: str = "",
-    include_pointers: Tuple[str, ...] = (),
-    exclude_pointers: Tuple[str, ...] = (),
+    include_pointers: tuple[str, ...] = (),
+    exclude_pointers: tuple[str, ...] = (),
 ) -> None:
     """
     Update requirement versions in the specified files.
